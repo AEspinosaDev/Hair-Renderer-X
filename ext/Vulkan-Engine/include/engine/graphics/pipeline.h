@@ -20,7 +20,7 @@ namespace Graphics {
 // GENERAL PIPELINE SETTINGS
 struct PipelineSettings {
 
-    std::unordered_map<int, bool> descriptorSetLayoutIDs;
+    std::map<int, bool> descriptorSetLayoutIDs;
     std::vector<PushConstant>     pushConstants = {};
 };
 // GRAPHIC PIPELINE SETTINGS

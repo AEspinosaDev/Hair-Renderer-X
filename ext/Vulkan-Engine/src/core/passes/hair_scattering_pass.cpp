@@ -169,7 +169,7 @@ void HairScatteringPass::setup_shader_passes() {
     // m_shaderPasses[2] = GIPass;
 
     ComputeShaderPass* LUTPass               = new ComputeShaderPass(m_device->get_handle(), ENGINE_RESOURCES_PATH "shaders/misc/compute_hair_LUT.glsl");
-    LUTPass->settings.descriptorSetLayoutIDs = {{GLOBAL_LAYOUT, TRUE}, {OBJECT_LAYOUT, false}, {OBJECT_TEXTURE_LAYOUT, false}};
+    LUTPass->settings.descriptorSetLayoutIDs = {{GLOBAL_LAYOUT, true}, {OBJECT_LAYOUT, false}, {OBJECT_TEXTURE_LAYOUT, false}};
     LUTPass->build_shader_stages();
     LUTPass->build(m_descriptorPool);
     m_shaderPasses[2] = LUTPass;
