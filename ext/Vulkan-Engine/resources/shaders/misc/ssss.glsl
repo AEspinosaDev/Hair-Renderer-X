@@ -1,18 +1,3 @@
-/*
-    Screen-Space Subsurface Scattering shader.
-
-    Multiple scattering:
-      Disk kernel with Burley normalized diffusion profile R(r,d).
-      CPU samples are importance-sampled from the radial CDF so equal
-      weights are used here; per-channel normalization corrects spectral bias.
-
-    Single scattering (translucency):
-      Beer-Lambert: T = exp(-thickness * extinctionCoeff)
-      Applied to back-facing irradiance modulated by (1 - Fdr).
-
-    Pixels with scatterMask == 0 pass through unchanged.
-*/
-
 #shader vertex
 #version 460
 

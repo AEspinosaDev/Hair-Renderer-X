@@ -172,11 +172,19 @@ void BaseRenderer::connect_pass(Core::BasePass* const currentPass) {
     if (currentPass->get_image_dependace_table().empty())
         return;
 
+    // Sort entries by (passID, fboID) so that image ordering in
+    // link_previous_images() is deterministic regardless of hash order.
+    auto table = currentPass->get_image_dependace_table();
+    std::vector<std::pair<iVec2, std::vector<uint32_t>>> sorted(table.begin(), table.end());
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+        return a.first.x < b.first.x || (a.first.x == b.first.x && a.first.y < b.first.y);
+    });
+
     std::vector<Graphics::Image> images;
-    for (auto pair : currentPass->get_image_dependace_table())
+    for (auto& pair : sorted)
     {
         uint32_t passID = pair.first.x;
-        uint32_t fboID = pair.first.y;
+        uint32_t fboID  = pair.first.y;
 
         Graphics::Framebuffer fbo = m_passes[passID]->get_framebuffers()[fboID];
         for (size_t i = 0; i < pair.second.size(); i++)
