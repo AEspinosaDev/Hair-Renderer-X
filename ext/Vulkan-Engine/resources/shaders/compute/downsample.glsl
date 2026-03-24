@@ -8,7 +8,7 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(set = 0, binding = 0) uniform sampler2D     srcImage; 
 // Both bindings point to the same image view.
 #define MIPMAP_LEVELS 6
-layout(set = 0, binding = 2, r32f) uniform image2D  mipImages   [MIPMAP_LEVELS];
+layout(set = 0, binding = 2, rgba32f) uniform image2D  mipImages   [MIPMAP_LEVELS];
 layout(set = 0, binding = 3) uniform sampler2D      mipSamplers [MIPMAP_LEVELS];
 
 layout(push_constant) uniform Mipmap {

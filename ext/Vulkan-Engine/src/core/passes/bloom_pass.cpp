@@ -111,7 +111,9 @@ void BloomPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32
 
     if (m_bloomStrength != 0.0f)
     {
-        cmd = currentFrame.computeCommandBuffer;
+        // Run bloom compute in the graphics command buffer (already begun by start_frame)
+        // so it executes after the SSS renderpass that wrote m_brightImage.
+        cmd = currentFrame.commandBuffer;
 
         struct Mipmap {
             uint32_t srcLevel;
@@ -120,14 +122,12 @@ void BloomPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32
 
         const uint32_t WORK_GROUP_SIZE = 16;
 
-        cmd.begin();
-
         cmd.pipeline_barrier(m_brightImage,
-                             LAYOUT_UNDEFINED,
                              LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                             ACCESS_SHADER_WRITE,
+                             LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                             ACCESS_COLOR_ATTACHMENT_WRITE,
                              ACCESS_SHADER_READ,
-                             STAGE_FRAGMENT_SHADER,
+                             STAGE_COLOR_ATTACHMENT_OUTPUT,
                              STAGE_COMPUTE_SHADER);
         cmd.pipeline_barrier(m_bloomImage,
                              LAYOUT_UNDEFINED,
@@ -170,14 +170,6 @@ void BloomPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32
                                  STAGE_COMPUTE_SHADER);
         }
 
-        cmd.pipeline_barrier(m_brightImage,
-                             LAYOUT_UNDEFINED,
-                             LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                             ACCESS_SHADER_WRITE,
-                             ACCESS_SHADER_READ,
-                             STAGE_FRAGMENT_SHADER,
-                             STAGE_COMPUTE_SHADER);
-
         ////////////////////////////////////////////////////////////
         // UPSAMPLE
         ////////////////////////////////////////////////////////////
@@ -216,12 +208,6 @@ void BloomPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32
                              ACCESS_SHADER_WRITE,
                              ACCESS_SHADER_READ,
                              STAGE_COMPUTE_SHADER);
-
-        cmd.end();
-
-        cmd.submit();
-
-        m_device->wait_queue(QueueType::COMPUTE_QUEUE);
 
         m_descriptorPool.set_descriptor_write(&m_bloomImage, LAYOUT_SHADER_READ_ONLY_OPTIMAL, &m_imageDescriptorSet, 4);
     }
