@@ -53,6 +53,11 @@ layout(set = 1, binding = 1) uniform MaterialUniforms {
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outBrightColor;
+layout(location = 2) out vec4 outNormals;
+layout(location = 3) out vec4 outAlbedoMask;
+layout(location = 4) out vec4 outDiffuseIrr;
+layout(location = 5) out vec4 outBackIrr;
+layout(location = 6) out vec4 outLinearDepth;
 
 const float EPSILON = 0.1;
 
@@ -77,4 +82,10 @@ void main() {
 
     if(material.alphaTest)
         if(material.color.a<1-EPSILON)discard;
+
+    outNormals     = vec4(0.0);
+    outAlbedoMask  = vec4(0.0, 0.0, 0.0, 0.0);
+    outDiffuseIrr  = vec4(0.0);
+    outBackIrr     = vec4(0.0);
+    outLinearDepth = vec4(gl_FragCoord.z, 0.0, 0.0, 0.0);
 }

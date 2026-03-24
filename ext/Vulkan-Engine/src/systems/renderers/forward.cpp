@@ -39,7 +39,9 @@ void ForwardRenderer::create_passes() {
     const uint32_t SHADOW_RES          = (uint32_t)m_shadowQuality;
     const uint32_t totalImagesInFlight = (uint32_t)m_settings.bufferingType + 1;
 
-    m_passes.resize(7, nullptr);
+    const bool msaa = m_settings.samplesMSAA > MSAASamples::x1;
+
+    m_passes.resize(9, nullptr);
     // Shadow Pass
     m_passes[SHADOW_PASS] = new Core::VarianceShadowPass(m_device, {SHADOW_RES, SHADOW_RES}, ENGINE_MAX_LIGHTS, m_settings.depthFormat);
 
@@ -52,10 +54,27 @@ void ForwardRenderer::create_passes() {
     m_passes[FORWARD_PASS] = new Core::ForwardPass(m_device, m_window->get_extent(), SRGBA_32F, m_settings.depthFormat, m_settings.samplesMSAA, false);
     m_passes[FORWARD_PASS]->set_image_dependace_table({{iVec2(SHADOW_PASS, 0), {0}}});
 
-    // Bloom Pass
+    // SSAO / Thickness Pass — reads LinearDepth and Normals from FORWARD_PASS
+    // MSAA layout: att 13 = LinearDepth resolve, att 9 = Normals resolve
+    // Non-MSAA:    att  6 = LinearDepth,          att 2 = Normals
+    m_passes[SSAO_PASS] = new Core::SSAOPass(m_device, m_window->get_extent(), Core::ResourceManager::VIGNETTE);
+    m_passes[SSAO_PASS]->set_image_dependace_table(
+        {{iVec2(FORWARD_PASS, 0), {msaa ? 13u : 6u, msaa ? 9u : 2u}}});
+
+    // SSS Pass — reads HDR/AlbedoMask/DiffIrr/BackIrr/Depth/Bright from FORWARD_PASS
+    //            and AO+Thickness from SSAO_PASS
+    // link_previous_images order: [0]=HDR [1]=AlbedoMask [2]=DiffIrr [3]=BackIrr
+    //                             [4]=Depth [5]=Bright [6]=AO  (FORWARD_PASS first, lower index)
+    m_passes[SSS_PASS] = new Core::SSSPass(m_device, m_window->get_extent(), Core::ResourceManager::VIGNETTE);
+    m_passes[SSS_PASS]->set_image_dependace_table(
+        {{iVec2(FORWARD_PASS, 0), {msaa ? 7u : 0u, msaa ? 10u : 3u, msaa ? 11u : 4u,
+                                   msaa ? 12u : 5u, msaa ? 13u : 6u, msaa ? 8u  : 1u}},
+         {iVec2(SSAO_PASS, 0),    {0u}}});
+
+    // Bloom Pass — reads scattered HDR (att 0) and Bright pass-through (att 1) from SSS_PASS
     m_passes[BLOOM_PASS] = new Core::BloomPass(m_device, m_window->get_extent(), Core::ResourceManager::VIGNETTE);
-    m_passes[BLOOM_PASS]->set_image_dependace_table(
-        {{iVec2(FORWARD_PASS, 0), {m_settings.samplesMSAA > MSAASamples::x1 ? (uint32_t)2 : 0, m_settings.samplesMSAA > MSAASamples::x1 ? (uint32_t)3 : 1}}});
+    m_passes[BLOOM_PASS]->set_image_dependace_table({{iVec2(SSS_PASS, 0), {0u, 1u}}});
+
     // Tonemapping
     m_passes[TONEMAPPIN_PASS] = new Core::PostProcessPass(m_device,
                                                           m_window->get_extent(),

@@ -103,6 +103,11 @@ layout(location = 6) in mat3 v_TBN;
 //Output
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outBrightColor;
+layout(location = 2) out vec4 outNormals;
+layout(location = 3) out vec4 outAlbedoMask;
+layout(location = 4) out vec4 outDiffuseIrr;
+layout(location = 5) out vec4 outBackIrr;
+layout(location = 6) out vec4 outLinearDepth;
 
 
 //Uniforms
@@ -193,35 +198,38 @@ void main() {
 
     //Compute all lights ___________________________________________________________________
     vec3 color = vec3(0.0);
+    vec3 diffuseIrr = vec3(0.0);
+    vec3 backIrr = vec3(0.0);
     for(int i = 0; i < scene.numLights; i++) {
         //If inside liught area influence
         if(isInAreaOfInfluence(scene.lights[i], v_pos)){
 
-            vec3 lighting =evalSchlickSmithBRDF( 
-                scene.lights[i].type != DIRECTIONAL_LIGHT ? normalize(scene.lights[i].position - v_pos) : normalize(scene.lights[i].position.xyz), //wi
-                normalize(-v_pos),                                                                                           //wo
-                scene.lights[i].color * computeAttenuation( scene.lights[i], v_pos) *  scene.lights[i].intensity,              //radiance
-                brdf
-                );
+            vec3 wi = scene.lights[i].type != DIRECTIONAL_LIGHT ? normalize(scene.lights[i].position - v_pos) : normalize(scene.lights[i].position.xyz);
+            vec3 radiance = scene.lights[i].color * computeAttenuation(scene.lights[i], v_pos) * scene.lights[i].intensity;
 
+            vec3 lighting = evalSchlickSmithBRDF(wi, normalize(-v_pos), radiance, brdf);
 
+            float shadowFactor = 1.0;
             if(int(object.otherParams.y) == 1 && scene.lights[i].shadowCast == 1) {
                 if(scene.lights[i].shadowType == 0) //Classic
-                    lighting *= computeShadow(shadowMap, scene.lights[i], i, v_modelPos);
-                if(scene.lights[i].shadowType == 1) //VSM   
-                    lighting *= computeVarianceShadow(shadowMap, scene.lights[i], i, v_modelPos);
-                if(scene.lights[i].shadowType == 2) //Raytraced  
-                    lighting *= computeRaytracedShadow(
-                        TLAS, 
+                    shadowFactor = computeShadow(shadowMap, scene.lights[i], i, v_modelPos);
+                if(scene.lights[i].shadowType == 1) //VSM
+                    shadowFactor = computeVarianceShadow(shadowMap, scene.lights[i], i, v_modelPos);
+                if(scene.lights[i].shadowType == 2) //Raytraced
+                    shadowFactor = computeRaytracedShadow(
+                        TLAS,
                         blueNoiseMap,
-                        v_modelPos, 
+                        v_modelPos,
                         scene.lights[i].type != DIRECTIONAL_LIGHT ? scene.lights[i].shadowData.xyz - v_modelPos : scene.lights[i].shadowData.xyz,
-                        int(scene.lights[i].shadowData.w), 
-                        scene.lights[i].area, 
+                        int(scene.lights[i].shadowData.w),
+                        scene.lights[i].area,
                         0);
             }
+            lighting *= shadowFactor;
 
-        color += lighting;
+            color += lighting;
+            diffuseIrr += max(dot(brdf.normal, wi), 0.0) * radiance * shadowFactor;
+            backIrr    += max(dot(-brdf.normal, wi), 0.0) * radiance;
         }
     }
 
@@ -261,6 +269,10 @@ void main() {
     else
         outBrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 
-
+    outNormals     = vec4(brdf.normal, 0.0);
+    outAlbedoMask  = vec4(brdf.albedo, 1.0);
+    outDiffuseIrr  = vec4(diffuseIrr, 0.0);
+    outBackIrr     = vec4(backIrr, 0.0);
+    outLinearDepth = vec4(gl_FragCoord.z, 0.0, 0.0, 0.0);
 
 }

@@ -12,8 +12,12 @@ void ForwardPass::setup_attachments(std::vector<Graphics::AttachmentInfo>& attac
     uint16_t samples      = static_cast<uint16_t>(m_aa);
     bool     multisampled = samples > 1;
 
-    attachments.resize(multisampled ? 4 : 2);
+    // 7 color attachments + 7 resolve attachments (MSAA only). Depth pushed at end.
+    // Color layout : [0] HDR, [1] Bright, [2] Normals, [3] AlbedoMask, [4] DiffuseIrr, [5] BackIrr, [6] LinearDepth
+    // Resolve layout (MSAA): [7..13] mirror [0..6]
+    attachments.resize(multisampled ? 14 : 7);
 
+    // [0] HDR color
     attachments[0] = Graphics::AttachmentInfo(
         m_colorFormat,
         samples,
@@ -25,45 +29,94 @@ void ForwardPass::setup_attachments(std::vector<Graphics::AttachmentInfo>& attac
         TEXTURE_2D,
         FILTER_LINEAR,
         ADDRESS_MODE_CLAMP_TO_EDGE);
-
     attachments[0].isDefault = m_isDefault ? (multisampled ? false : true) : false;
 
-    // Bright color buffer. m_colorFormat should be in floating point.
-    attachments[1] = Graphics::AttachmentInfo(m_colorFormat,
-                                              samples,
-                                              LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                              LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                              IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
-                                              COLOR_ATTACHMENT,
-                                              ASPECT_COLOR,
-                                              TEXTURE_2D,
-                                              FILTER_LINEAR,
-                                              ADDRESS_MODE_CLAMP_TO_EDGE);
+    // [1] Bright color buffer (for bloom)
+    attachments[1] = Graphics::AttachmentInfo(m_colorFormat, samples,
+        LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+        COLOR_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE);
 
-    Graphics::AttachmentInfo resolveAttachment;
+    // [2] View-space normals (RGB)
+    attachments[2] = Graphics::AttachmentInfo(SRGBA_16F, samples,
+        LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+        COLOR_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE);
+
+    // [3] Albedo (RGB) + scatterMask (A). Clear alpha=0 so undrawn pixels skip SSS.
+    attachments[3] = Graphics::AttachmentInfo(SRGBA_16F, samples,
+        LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+        COLOR_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE,
+        {{{0.0f, 0.0f, 0.0f, 0.0f}}});
+
+    // [4] Diffuse irradiance (front-facing, no albedo multiply, no specular)
+    attachments[4] = Graphics::AttachmentInfo(SRGBA_16F, samples,
+        LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+        COLOR_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE);
+
+    // [5] Back irradiance (lighting with flipped normal, for single-scatter translucency)
+    attachments[5] = Graphics::AttachmentInfo(SRGBA_16F, samples,
+        LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+        COLOR_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE);
+
+    // [6] Linear depth copy (gl_FragCoord.z). Same sample count as other attachments; resolved to single-sample for post-process.
+    attachments[6] = Graphics::AttachmentInfo(SR_32F, samples,
+        LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+        COLOR_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_NEAREST, ADDRESS_MODE_CLAMP_TO_EDGE,
+        {{{1.0f, 0.0f, 0.0f, 0.0f}}});
+
     if (multisampled)
     {
-        attachments[2] = Graphics::AttachmentInfo(
-            m_colorFormat,
-            1,
+        // [7] Resolve HDR
+        attachments[7] = Graphics::AttachmentInfo(
+            m_colorFormat, 1,
             m_isDefault ? LAYOUT_PRESENT : LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             !m_isDefault ? IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED : IMAGE_USAGE_TRANSIENT_ATTACHMENT | IMAGE_USAGE_COLOR_ATTACHMENT,
-            RESOLVE_ATTACHMENT,
-            ASPECT_COLOR,
-            TEXTURE_2D);
-        attachments[2].isDefault = m_isDefault ? true : false;
+            RESOLVE_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D);
+        attachments[7].isDefault = m_isDefault ? true : false;
 
-        attachments[3] = Graphics::AttachmentInfo(m_colorFormat,
-                                                  1,
-                                                  LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                                  LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                                  IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
-                                                  RESOLVE_ATTACHMENT,
-                                                  ASPECT_COLOR,
-                                                  TEXTURE_2D,
-                                                  FILTER_LINEAR,
-                                                  ADDRESS_MODE_CLAMP_TO_EDGE);
+        // [8] Resolve Bright
+        attachments[8] = Graphics::AttachmentInfo(m_colorFormat, 1,
+            LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+            RESOLVE_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE);
+
+        // [9] Resolve Normals
+        attachments[9] = Graphics::AttachmentInfo(SRGBA_16F, 1,
+            LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+            RESOLVE_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE);
+
+        // [10] Resolve AlbedoMask
+        attachments[10] = Graphics::AttachmentInfo(SRGBA_16F, 1,
+            LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+            RESOLVE_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE,
+            {{{0.0f, 0.0f, 0.0f, 0.0f}}});
+
+        // [11] Resolve DiffuseIrradiance
+        attachments[11] = Graphics::AttachmentInfo(SRGBA_16F, 1,
+            LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+            RESOLVE_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE);
+
+        // [12] Resolve BackIrradiance
+        attachments[12] = Graphics::AttachmentInfo(SRGBA_16F, 1,
+            LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+            RESOLVE_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_LINEAR, ADDRESS_MODE_CLAMP_TO_EDGE);
+
+        // [13] Resolve LinearDepth
+        attachments[13] = Graphics::AttachmentInfo(SR_32F, 1,
+            LAYOUT_SHADER_READ_ONLY_OPTIMAL, LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            IMAGE_USAGE_COLOR_ATTACHMENT | IMAGE_USAGE_SAMPLED,
+            RESOLVE_ATTACHMENT, ASPECT_COLOR, TEXTURE_2D, FILTER_NEAREST, ADDRESS_MODE_CLAMP_TO_EDGE,
+            {{{1.0f, 0.0f, 0.0f, 0.0f}}});
     }
 
     Graphics::AttachmentInfo depthAttachment = Graphics::AttachmentInfo(m_depthFormat,
@@ -76,10 +129,8 @@ void ForwardPass::setup_attachments(std::vector<Graphics::AttachmentInfo>& attac
                                                                         TEXTURE_2D);
     attachments.push_back(depthAttachment);
 
-    // Depdencies
+    // Dependencies
     dependencies.resize(2);
-    // STAGE_COLOR_ATTACHMENT_OUTPUT, STAGE_FRAGMENT_SHADER, ACCESS_SHADER_READ);
-
     dependencies[0] = Graphics::SubPassDependency(STAGE_COLOR_ATTACHMENT_OUTPUT, STAGE_COLOR_ATTACHMENT_OUTPUT, ACCESS_COLOR_ATTACHMENT_WRITE);
     dependencies[1] = Graphics::SubPassDependency(STAGE_EARLY_FRAGMENT_TESTS, STAGE_EARLY_FRAGMENT_TESTS, ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE);
 }
@@ -198,7 +249,15 @@ void ForwardPass::setup_shader_passes() {
                                                                       VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE,
                                                                       VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
                                                                       VK_DYNAMIC_STATE_CULL_MODE};
-    std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{Init::color_blend_attachment_state(true), Init::color_blend_attachment_state(true)};
+    std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{
+        Init::color_blend_attachment_state(true), // [0] HDR
+        Init::color_blend_attachment_state(true), // [1] Bright
+        Init::color_blend_attachment_state(true), // [2] Normals
+        Init::color_blend_attachment_state(true), // [3] AlbedoMask
+        Init::color_blend_attachment_state(true), // [4] DiffuseIrradiance
+        Init::color_blend_attachment_state(true), // [5] BackIrradiance
+        Init::color_blend_attachment_state(true), // [6] LinearDepth
+    };
 
     VkSampleCountFlagBits samples = static_cast<VkSampleCountFlagBits>(m_aa);
 
@@ -265,7 +324,7 @@ void ForwardPass::setup_shader_passes() {
     hairStrandPass2->graphicSettings.dynamicStates      = dynamicStates;
     hairStrandPass2->graphicSettings.samples            = samples;
     hairStrandPass2->graphicSettings.sampleShading      = true;
-    hairStrandPass2->graphicSettings.blendAttachments   = {Init::color_blend_attachment_state(true), Init::color_blend_attachment_state(true)};
+    hairStrandPass2->graphicSettings.blendAttachments   = blendAttachments;
     hairStrandPass2->graphicSettings.topology           = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
     hairStrandPass2->graphicSettings.alphaToCoverage    = false;
     hairStrandPass2->graphicSettings.alphaToOne    = false;
