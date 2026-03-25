@@ -27,6 +27,9 @@ class HairViewer
 
     bool animateLight{true};
 
+    int m_maxFrames{0};
+    int m_frameCount{0};
+
     struct Time {
         float delta{0.0f};
         float last{0.0f};
@@ -38,6 +41,8 @@ class HairViewer
     void init(Systems::RendererSettings settings);
 
     void run(Systems::RendererSettings settings);
+
+    void set_max_frames(int n) { m_maxFrames = n; }
 
   private:
     void load_neural_avatar(const char* hairFile,

@@ -178,7 +178,66 @@ Both passes are self-contained:
 
 The engine uses `file(GLOB_RECURSE ...)` via `add_module_files()` in `cmake/add_module_files.cmake`. All `.cpp` and `.h` files in the `core/passes/` directories are automatically picked up — no changes needed.
 
-### Task 8: Update GUI (optional, but useful for tuning) — 🔲 NOT STARTED
+### Task 8: Create Debug Test Harness — ✅ DONE
+
+**Goal**: Enable Claude (and the user) to run the renderer in debug mode, capture the Vulkan validation layer trace to a file, and inspect it for errors — without needing visual inspection. The user will do their own visual-inspection runs separately.
+
+**Files to modify**:
+- `src/main.cpp` — new CLI flags
+- `ext/Vulkan-Engine/thirdparty/logger/include/logger.h` — minor additions if needed
+- `ext/Vulkan-Engine/include/engine/graphics/utilities/utils.h` — verbosity-filtered debug callback
+- `ext/Vulkan-Engine/src/graphics/utilities/utils.cpp` — wire severity filter
+- `src/application.h` / `src/application.cpp` — frame-limited render loop
+
+**New CLI flags**:
+- `--frames N` — Run for N frames then auto-exit (default: no limit, interactive). Suggested test value: 10.
+- `--log-level <error|warn|verbose>` — Controls which Vulkan validation layer messages are captured. `error` = errors only, `warn` = warnings + errors (default), `verbose` = all including verbose/info.
+- `--log-file <path>` — Path to write the trace file. Fixed default: `build/debug_trace.log`.
+
+**Steps**:
+1. Parse the three new CLI flags in `main.cpp`, pass them through to `Logger::init()` and the application.
+2. Modify the Vulkan debug callback (`debugCallback` in `utils.h`) to filter messages based on the configured log level. Currently it captures verbose+warning+error indiscriminately — gate each severity behind the chosen verbosity.
+3. Initialize the Logger with file output (`Logger::init(level, filePath)`) when `--log-file` is provided (or always when `--frames` is used, defaulting to `build/debug_trace.log`).
+4. Add a frame counter to the render loop in `application.cpp`. When `--frames N` is set, exit cleanly after N iterations of `tick()`.
+5. Ensure the log file is flushed and closed on exit (`Logger::shutdown()`).
+6. Validation layers must be enabled (Debug build). The test is always run with a Debug build — document this requirement.
+
+**Verbosity levels mapping**:
+| `--log-level` | Vulkan severities captured |
+|---------------|---------------------------|
+| `error` | `ERROR` only |
+| `warn` | `WARNING` + `ERROR` |
+| `verbose` | `VERBOSE` + `INFO` + `WARNING` + `ERROR` |
+
+**Future extensions** (not in scope now):
+- An extra verbosity level that also captures engine-level logs (pass setup, resource creation, etc.).
+- A dedicated lightweight test scene for faster iteration.
+
+**Output**: Running `./HairViewer --frames 10 --log-level warn` from `build/` produces `build/debug_trace.log` containing timestamped validation layer messages (or an empty/minimal file if no issues).
+
+---
+
+### Task 9: Validation Run — Fix Pipeline Issues — 🔲 NOT STARTED
+
+**Goal**: Run the debug test harness from Task 8, inspect the validation trace, and fix all Vulkan validation errors and warnings introduced by the new passes (SSAO, SSS, MRT changes).
+
+**Procedure**:
+1. Build in Debug mode: `cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .`
+2. Run: `./HairViewer --frames 10 --log-level verbose --log-file debug_trace.log`
+3. Claude reads `build/debug_trace.log` and triages:
+   - **Errors** — must fix. Likely causes: descriptor set mismatches, missing image transitions, incorrect attachment references, synchronization issues.
+   - **Warnings** — fix if related to new code; document if pre-existing.
+   - **Verbose/Info** — scan for anomalies, no action unless suspicious.
+4. Fix each issue, re-run, verify the fix.
+5. Repeat until the trace is clean (no errors, no new warnings).
+
+**Subtasks**: Unknown at this point — will be added as issues are discovered during the validation run. Each fix may require its own subtask (e.g., "Fix missing image layout transition in SSAOPass", "Fix descriptor binding mismatch in SSSPass", etc.). Expect iterative cycles of run → read trace → fix → re-run.
+
+**Completion criteria**: A clean trace (zero errors, zero warnings from new code) over a 10-frame run with `--log-level verbose`.
+
+---
+
+### Task 10: Update GUI (optional, but useful for tuning) — 🔲 NOT STARTED
 
 **Files to modify**:
 - `src/gui.h` / `src/gui.cpp`

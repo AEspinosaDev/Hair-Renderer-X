@@ -195,8 +195,13 @@ inline static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSe
                                                            VkDebugUtilsMessageTypeFlagsEXT             messageType,
                                                            const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                                                            void*                                       pUserData) {
-
-    LOG_DEBUG(Logger::format_with_tag("[Validation Layer]", "\033[34m", pCallbackData->pMessage));
+    std::string msg = Logger::format_with_tag("[Validation Layer]", "\033[34m", pCallbackData->pMessage);
+    if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        Logger::log(LogLevel::Error, msg);
+    else if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        Logger::log(LogLevel::Warn, msg);
+    else
+        Logger::log(LogLevel::Info, msg);
 
     return VK_FALSE;
 }

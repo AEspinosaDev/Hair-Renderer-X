@@ -36,10 +36,12 @@ The renderer is **forward** (not deferred). The `ForwardRenderer` (`systems/rend
 | 0 | `SHADOW_PASS` | Variance shadow map | Per-light shadow maps |
 | 1 | `HAIR_SCATTER_PASS` | Compute | Hair scattering LUT |
 | 2 | `HAIR_VOXELIZATION_PASS` | Compute | Hair volume density |
-| 3 | `FORWARD_PASS` | Rasterization (MSAA) | Main scene rendering |
-| 4 | `BLOOM_PASS` | Post-process | Physically-based bloom (Jimenez 2014) |
-| 5 | `TONEMAPPIN_PASS` | Post-process | HDR tonemapping |
-| 6 | `FXAA_PASS` | Post-process | Optional software AA |
+| 3 | `FORWARD_PASS` | Rasterization (MSAA+MRT) | Main scene rendering |
+| 4 | `SSAO_PASS` | Post-process | Ambient occlusion + thickness |
+| 5 | `SSS_PASS` | Post-process | Subsurface scattering |
+| 6 | `BLOOM_PASS` | Post-process | Physically-based bloom (Jimenez 2014) |
+| 7 | `TONEMAPPIN_PASS` | Post-process | HDR tonemapping |
+| 8 | `FXAA_PASS` | Post-process | Optional software AA |
 
 Hair rendering uses the forward path because hair fibers benefit from hardware MSAA — TAA is insufficient for fine strands.
 
@@ -90,3 +92,56 @@ Resources flow between passes through the dependency table + `link_previous_imag
 The workflow for this project will be mainly driven by the user, and Claude will execute the proposed tasks. But Claude will always double-check the orders and ask any inquiries to the user before performing a task. After finishing a task, Claude will summarize the results and ask the user for validation, and automatically update the PLAN.md to mark the task as done, and summarize the issues found and solutions implemented. It should also update CLAUDE.md if necessary.
 
 **Before writing significant code**, Claude should ask the user questions to validate the plan. Don't assume — ask. **Plans should be fool-proof**, so Claude should make the necessary amount of questions to the user before committing to the plan.
+
+## Debug Test Harness
+
+The project includes a debug test mode for validating the Vulkan pipeline without visual inspection. Claude should use this to verify changes that touch render passes, descriptors, or synchronization.
+
+### Building for test
+
+```bash
+cd build
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+cmake --build .
+```
+
+A Debug build enables Vulkan validation layers automatically (`NDEBUG` not defined).
+
+### Running a validation test
+
+```bash
+# From build/
+./HairViewer --frames 10 --log-level warn
+```
+
+This renders 10 frames, captures validation layer messages to `build/debug_trace.log`, then exits cleanly.
+
+### CLI flags
+
+| Flag | Values | Default | Description |
+|------|--------|---------|-------------|
+| `--frames N` | Any positive integer | No limit (interactive) | Auto-exit after N frames |
+| `--log-level` | `error`, `warn`, `verbose` | `warn` | Vulkan validation message severity filter |
+| `--log-file` | File path | `build/debug_trace.log` | Where to write the trace (auto-set when `--frames` is used) |
+
+### Verbosity levels
+
+| Level | Vulkan severities captured |
+|-------|---------------------------|
+| `error` | `ERROR` only |
+| `warn` | `WARNING` + `ERROR` |
+| `verbose` | `VERBOSE` + `INFO` + `WARNING` + `ERROR` |
+
+### Interpreting results
+
+- **Empty or minimal trace** = clean run, no issues.
+- **Errors** = must fix. Typical causes: descriptor mismatches, missing image layout transitions, synchronization issues.
+- **Warnings** = fix if from new code, document if pre-existing.
+- After fixing, re-run and verify the trace is clean.
+
+### Key files
+
+- Debug callback: `ext/Vulkan-Engine/include/engine/graphics/utilities/utils.h` (`debugCallback`)
+- Severity filter wiring: `ext/Vulkan-Engine/src/graphics/utilities/utils.cpp`
+- Logger: `ext/Vulkan-Engine/thirdparty/logger/include/logger.h`
+- CLI parsing + frame limit: `src/main.cpp`, `src/application.h/cpp`

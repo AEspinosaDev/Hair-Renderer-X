@@ -13,6 +13,10 @@ int main(int argc, char* argv[]) {
         // settings.renderingType = RendererType::TFORWARD;
         // settings.shadowResolution = ShadowResolution::MEDIUM;
 
+        int         maxFrames{0};
+        LogLevel    logLevel{LogLevel::Warn};
+        std::string logFile{};
+
         if (argc == 1)
             std::cout << "No arguments submitted, initializing with default parameters..." << std::endl;
 
@@ -86,16 +90,63 @@ int main(int argc, char* argv[]) {
                     settings.enableUI = false;
                 i++;
                 continue;
+            } else if (token == "--frames")
+            {
+                if (i + 1 >= argc)
+                {
+                    std::cerr << "\"--frames\" expects a positive integer" << std::endl;
+                    return EXIT_FAILURE;
+                }
+                maxFrames = std::stoi(argv[++i]);
+                continue;
+            } else if (token == "--log-level")
+            {
+                if (i + 1 >= argc)
+                {
+                    std::cerr << "\"--log-level\" expects: error | warn | verbose" << std::endl;
+                    return EXIT_FAILURE;
+                }
+                std::string level(argv[++i]);
+                if (level == "error")
+                    logLevel = LogLevel::Error;
+                else if (level == "warn")
+                    logLevel = LogLevel::Warn;
+                else if (level == "verbose")
+                    logLevel = LogLevel::Info;
+                else
+                {
+                    std::cerr << "\"--log-level\" invalid value: " << level << " (expected: error | warn | verbose)" << std::endl;
+                    return EXIT_FAILURE;
+                }
+                continue;
+            } else if (token == "--log-file")
+            {
+                if (i + 1 >= argc)
+                {
+                    std::cerr << "\"--log-file\" expects a file path" << std::endl;
+                    return EXIT_FAILURE;
+                }
+                logFile = argv[++i];
+                continue;
             }
             continue;
         }
 
+        // In frame-limited (test) mode, always write to a log file
+        if (maxFrames > 0 && logFile.empty())
+            logFile = "debug_trace.log";
+
+        Logger::init(logLevel, logFile);
+
+        app.set_max_frames(maxFrames);
         app.run(settings);
     } catch (const std::exception& e)
     {
         std::cerr << e.what() << std::endl;
+        Logger::shutdown();
         return EXIT_FAILURE;
     }
 
+    Logger::shutdown();
     return EXIT_SUCCESS;
 }

@@ -28,11 +28,13 @@ void HairViewer::run(Systems::RendererSettings settings) {
     init(settings);
     while (!m_window->get_window_should_close())
     {
-
         // I-O
         m_window->poll_events();
 
         tick();
+
+        if (m_maxFrames > 0 && ++m_frameCount >= m_maxFrames)
+            break;
     }
     m_renderer->shutdown(m_scene);
 }
