@@ -38,6 +38,7 @@ void Swapchain::create(VkPhysicalDevice &gpu, VkDevice &device, VkExtent2D actua
     VkSurfaceFormatKHR surfaceFormat = choose_swap_surface_format(swapChainSupport.formats, userDefinedcolorFormat);
     VkPresentModeKHR presentMode = choose_swap_present_mode(swapChainSupport.presentModes, userDefinedPresentMode);
     VkExtent2D extent = choose_swap_extent(swapChainSupport.capabilities, actualExtent);
+    m_swapchainExtent = extent;
 
     imageCount = swapChainSupport.capabilities.minImageCount + (imageCount - 1);
 

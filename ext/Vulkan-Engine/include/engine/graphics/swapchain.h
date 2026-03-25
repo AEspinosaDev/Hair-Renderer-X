@@ -24,6 +24,7 @@ class Swapchain
     VkSurfaceKHR               m_surface;
     VkFormat                   m_presentFormat;
     VkPresentModeKHR           m_presentMode;
+    VkExtent2D                 m_swapchainExtent{0, 0};
     std::vector<Image>         m_presentImages;
 
     bool m_initialized{false};
@@ -60,6 +61,9 @@ class Swapchain
     }
     inline std::vector<Image>& get_present_images() {
         return m_presentImages;
+    }
+    inline const VkExtent2D& get_swapchain_extent() const {
+        return m_swapchainExtent;
     }
 };
 

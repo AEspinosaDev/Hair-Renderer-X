@@ -126,7 +126,8 @@ void BaseRenderer::on_after_render(RenderResult& renderResult, Core::Scene* cons
     {
         m_window->set_resized(false);
         update_passes();
-        scene->get_active_camera()->set_projection(m_window->get_extent().width, m_window->get_extent().height);
+        const Extent2D& sc = m_device->get_swapchain().get_swapchain_extent();
+        scene->get_active_camera()->set_projection(sc.width, sc.height);
     } else if (renderResult != RenderResult::SUCCESS)
     { throw VKFW_Exception("failed to present swap chain image!"); }
 
@@ -204,7 +205,12 @@ void BaseRenderer::update_passes() {
                               static_cast<uint32_t>(m_settings.bufferingType),
                               m_settings.colorFormat,
                               m_settings.screenSync);
-                              
+
+    // Use the actual swapchain extent as the authoritative size for all passes.
+    // m_window->get_extent() may lag behind the real swapchain extent on X11/Wayland
+    // when the compositor hasn't committed the new surface size yet, causing a mismatch
+    // between framebuffer dimensions and swapchain image dimensions → device lost.
+    const Extent2D passExtent = m_device->get_swapchain().get_swapchain_extent();
 
     // Renderpass framebuffer updating
     for (Core::BasePass* pass : m_passes)
@@ -213,7 +219,7 @@ void BaseRenderer::update_passes() {
         {
             if (pass->resizeable())
             {
-                pass->set_extent(m_window->get_extent());
+                pass->set_extent(passExtent);
                 pass->update();
             }
             connect_pass(pass);
