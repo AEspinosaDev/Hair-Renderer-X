@@ -250,13 +250,13 @@ void ForwardPass::setup_shader_passes() {
                                                                       VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
                                                                       VK_DYNAMIC_STATE_CULL_MODE};
     std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{
-        Init::color_blend_attachment_state(true), // [0] HDR
-        Init::color_blend_attachment_state(true), // [1] Bright
-        Init::color_blend_attachment_state(true), // [2] Normals
-        Init::color_blend_attachment_state(true), // [3] AlbedoMask
-        Init::color_blend_attachment_state(true), // [4] DiffuseIrradiance
-        Init::color_blend_attachment_state(true), // [5] BackIrradiance
-        Init::color_blend_attachment_state(true), // [6] LinearDepth
+        Init::color_blend_attachment_state(true),  // [0] HDR — needs blending for transparency
+        Init::color_blend_attachment_state(true),  // [1] Bright
+        Init::color_blend_attachment_state(false), // [2] Normals — data MRT, no blending
+        Init::color_blend_attachment_state(false), // [3] AlbedoMask — data MRT, no blending
+        Init::color_blend_attachment_state(false), // [4] DiffuseIrradiance — data MRT, no blending
+        Init::color_blend_attachment_state(false), // [5] BackIrradiance — data MRT, no blending
+        Init::color_blend_attachment_state(false), // [6] LinearDepth — data MRT, no blending
     };
 
     VkSampleCountFlagBits samples = static_cast<VkSampleCountFlagBits>(m_aa);
