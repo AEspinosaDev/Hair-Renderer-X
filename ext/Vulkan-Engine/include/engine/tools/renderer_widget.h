@@ -63,12 +63,14 @@ class ForwardRendererWidget : public Widget
 
   protected:
     Systems::ForwardRenderer* m_renderer;
-    virtual void               render();
+    bool*                     m_animateLight{nullptr};
+    virtual void              render();
 
   public:
-    ForwardRendererWidget(Systems::ForwardRenderer* r)
+    ForwardRendererWidget(Systems::ForwardRenderer* r, bool* animateLight = nullptr)
         : Widget(ImVec2(0, 0), ImVec2(0, 0))
-        , m_renderer(r) {
+        , m_renderer(r)
+        , m_animateLight(animateLight) {
     }
 
     inline Systems::ForwardRenderer* get_renderer() const {

@@ -19,7 +19,7 @@ void HairViewer::init(Systems::RendererSettings settings) {
 
     setup();
 
-    m_interface.init(m_window, m_scene, m_renderer);
+    m_interface.init(m_window, m_scene, m_renderer, &animateLight);
     // m_renderer->set_gui_overlay(m_interface.overlay);
 }
 

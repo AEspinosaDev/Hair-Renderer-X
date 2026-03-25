@@ -115,6 +115,22 @@ class ForwardRenderer : public BaseRenderer
         if (m_passes[SSS_PASS]) static_cast<Core::SSSPass*>(m_passes[SSS_PASS])->set_extinction_coeff(e);
     }
 
+    // Pass enable/disable
+    inline bool get_ssao_active() const {
+        if (m_passes[SSAO_PASS]) return m_passes[SSAO_PASS]->is_active();
+        return false;
+    }
+    inline void set_ssao_active(bool v) {
+        if (m_passes[SSAO_PASS]) m_passes[SSAO_PASS]->set_active(v);
+    }
+    inline bool get_sss_active() const {
+        if (m_passes[SSS_PASS]) return m_passes[SSS_PASS]->is_active();
+        return false;
+    }
+    inline void set_sss_active(bool v) {
+        if (m_passes[SSS_PASS]) m_passes[SSS_PASS]->set_active(v);
+    }
+
   protected:
     virtual void on_before_render(Core::Scene* const scene);
 

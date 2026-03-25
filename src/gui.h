@@ -12,5 +12,5 @@ struct UserInterface {
     Tools::SceneExplorerWidget*  sceneWidget{nullptr};
     Tools::ObjectExplorerWidget* objectWidget{nullptr};
 
-    void init(Core::IWindow* window, Core::Scene* scene, Systems::BaseRenderer* renderer);
+    void init(Core::IWindow* window, Core::Scene* scene, Systems::BaseRenderer* renderer, bool* animateLight = nullptr);
 };

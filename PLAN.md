@@ -242,17 +242,21 @@ The engine uses `file(GLOB_RECURSE ...)` via `add_module_files()` in `cmake/add_
 
 ---
 
-### Task 10: Update GUI (optional, but useful for tuning) — 🔲 NOT STARTED
+### Task 10: Update GUI — ✅ DONE
 
-**Files to modify**:
-- `src/gui.h` / `src/gui.cpp`
-- Possibly `ext/Vulkan-Engine/include/engine/tools/widgets.h`
+**Files modified**:
+- `src/gui.h` / `src/gui.cpp` — updated `init()` signature to accept `bool* animateLight`; passes it to `ForwardRendererWidget`
+- `src/application.cpp` — passes `&animateLight` to `m_interface.init()`
+- `ext/Vulkan-Engine/include/engine/tools/renderer_widget.h` — added `bool* m_animateLight` field and updated `ForwardRendererWidget` constructor
+- `ext/Vulkan-Engine/src/tools/renderer_widget.cpp` — added SSAO section (enable checkbox + radius/bias/kernel sliders), SSS section (enable checkbox + scatter distance/extinction/max scatter sliders), Animate Light checkbox
+- `ext/Vulkan-Engine/include/engine/systems/renderers/forward.h` — added `get_ssao_active/set_ssao_active` and `get_sss_active/set_sss_active` inline methods
 
 **Steps**:
-1. Add sliders/controls for SSS parameters: scattering distance (vec3), extinction coefficient, max scatter radius, sample count.
-2. Add toggle to enable/disable the SSS pass.
-3. Add sliders for SSAO parameters: radius, bias, kernel size.
-4. Add toggle to enable/disable the SSAO pass.
+1. ✅ Add sliders/controls for SSS parameters: scattering distance (vec3), extinction coefficient, max scatter radius.
+2. ✅ Add toggle to enable/disable the SSS pass.
+3. ✅ Add sliders for SSAO parameters: radius, bias, kernel size.
+4. ✅ Add toggle to enable/disable the SSAO pass.
+5. ✅ Add toggle to enable/disable PointLight orbiting.
 
 ---
 

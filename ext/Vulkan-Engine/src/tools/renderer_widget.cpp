@@ -89,6 +89,49 @@ void Tools::ForwardRendererWidget::render() {
     {
         m_renderer->set_bloom_strength(bloomIntensity);
     }
+
+    ImGui::Separator();
+    ImGui::SeparatorText("SSAO");
+    bool ssaoEnabled = m_renderer->get_ssao_active();
+    if (ImGui::Checkbox("Enable SSAO", &ssaoEnabled))
+        m_renderer->set_ssao_active(ssaoEnabled);
+    if (ssaoEnabled)
+    {
+        float ssaoRadius = m_renderer->get_ssao_radius();
+        if (ImGui::DragFloat("SSAO Radius", &ssaoRadius, 0.01f, 0.0f, 2.0f))
+            m_renderer->set_ssao_radius(ssaoRadius);
+        float ssaoBias = m_renderer->get_ssao_bias();
+        if (ImGui::DragFloat("SSAO Bias", &ssaoBias, 0.001f, 0.0f, 0.1f))
+            m_renderer->set_ssao_bias(ssaoBias);
+        int ssaoKernel = m_renderer->get_ssao_kernel_size();
+        if (ImGui::DragInt("SSAO Kernel Size", &ssaoKernel, 1, 1, 64))
+            m_renderer->set_ssao_kernel_size(ssaoKernel);
+    }
+
+    ImGui::Separator();
+    ImGui::SeparatorText("SSS");
+    bool sssEnabled = m_renderer->get_sss_active();
+    if (ImGui::Checkbox("Enable SSS", &sssEnabled))
+        m_renderer->set_sss_active(sssEnabled);
+    if (sssEnabled)
+    {
+        Vec3  scatterDist = m_renderer->get_sss_scattering_distance();
+        float scatter[3]  = {scatterDist.x, scatterDist.y, scatterDist.z};
+        if (ImGui::DragFloat3("Scatter Distance", scatter, 0.01f, 0.0f, 2.0f))
+            m_renderer->set_sss_scattering_distance({scatter[0], scatter[1], scatter[2]});
+        float extinction = m_renderer->get_sss_extinction_coeff();
+        if (ImGui::DragFloat("Extinction", &extinction, 0.01f, 0.0f, 10.0f))
+            m_renderer->set_sss_extinction_coeff(extinction);
+        float maxScatter = m_renderer->get_sss_max_scatter();
+        if (ImGui::DragFloat("Max Scatter", &maxScatter, 0.01f, 0.0f, 5.0f))
+            m_renderer->set_sss_max_scatter(maxScatter);
+    }
+
+    if (m_animateLight != nullptr)
+    {
+        ImGui::Separator();
+        ImGui::Checkbox("Animate Light", m_animateLight);
+    }
 }
 // namespace Tools
 void Tools::DeferredRendererWidget::render() {
