@@ -93,6 +93,11 @@ layout(location = 6) in vec3 v_modelPos;
 //Output
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outBrightColor;
+layout(location = 2) out vec4 outNormals;
+layout(location = 3) out vec4 outAlbedoMask;
+layout(location = 4) out vec4 outDiffuseIrr;
+layout(location = 5) out vec4 outBackIrr;
+layout(location = 6) out vec4 outLinearDepth;
 
 layout(set = 0, binding = 1) uniform SceneUniforms {
     vec3 fogColor;
@@ -221,5 +226,12 @@ void main() {
         outBrightColor = vec4(color, 1.0);
     else
         outBrightColor = vec4(0.0, 0.0, 0.0, 1.0);
+
+    // MRT outputs — phong is not used for SSS; write zeros so SSS pass skips these pixels
+    outNormals     = vec4(0.0);
+    outAlbedoMask  = vec4(0.0);  // scatterMask = 0 in alpha → SSS pass-through
+    outDiffuseIrr  = vec4(0.0);
+    outBackIrr     = vec4(0.0);
+    outLinearDepth = vec4(gl_FragCoord.z, 0.0, 0.0, 0.0);
 
 }

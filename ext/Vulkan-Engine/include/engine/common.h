@@ -275,6 +275,7 @@ typedef enum ColorFormatTypeFlagBits
     SRGB_8         = VK_FORMAT_R8G8B8_SRGB,   // RGB
     SRGBA_8        = VK_FORMAT_R8G8B8A8_SRGB, // RGB with Alpha
     SBGRA_8        = VK_FORMAT_B8G8R8A8_SRGB, // Other order
+    BGRA_8U        = VK_FORMAT_B8G8R8A8_UNORM, // BGRA unsigned normalized (common swapchain fallback)
     SR_16F         = VK_FORMAT_R16_SFLOAT,
     SR_32F         = VK_FORMAT_R32_SFLOAT,
     SRG_16F        = VK_FORMAT_R16G16_SFLOAT,

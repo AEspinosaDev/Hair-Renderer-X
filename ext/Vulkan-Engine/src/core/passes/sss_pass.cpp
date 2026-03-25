@@ -148,6 +148,9 @@ void SSSPass::setup_shader_passes() {
     GraphicShaderPass* sssPass = new GraphicShaderPass(
         m_device->get_handle(), m_renderpass, m_imageExtent, ENGINE_RESOURCES_PATH "shaders/misc/ssss.glsl");
     sssPass->settings.descriptorSetLayoutIDs = {{GLOBAL_LAYOUT, true}};
+    // Two color attachments: att 0 = scattered HDR, att 1 = bright pass-through
+    sssPass->graphicSettings.blendAttachments = {Init::color_blend_attachment_state(false),
+                                                 Init::color_blend_attachment_state(false)};
     sssPass->graphicSettings.attributes      = {{POSITION_ATTRIBUTE, true},
                                                 {NORMAL_ATTRIBUTE, false},
                                                 {UV_ATTRIBUTE, true},

@@ -211,10 +211,11 @@ DescriptorPool Device::create_descriptor_pool(uint32_t                       max
     DescriptorPool pool = {};
     pool.device         = m_handle;
 
-    std::vector<VkDescriptorPoolSize> sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, numUBO},
-                                               {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, numUBODynamic},
-                                               {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, numUBOStorage},
-                                               {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, numImageCombined}};
+    std::vector<VkDescriptorPoolSize> sizes;
+    if (numUBO > 0)           sizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, numUBO});
+    if (numUBODynamic > 0)    sizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, numUBODynamic});
+    if (numUBOStorage > 0)    sizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, numUBOStorage});
+    if (numImageCombined > 0) sizes.push_back({VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, numImageCombined});
     if (numSampler > 0)
         sizes.push_back({VK_DESCRIPTOR_TYPE_SAMPLER, numSampler});
     if (numSampledImage > 0)

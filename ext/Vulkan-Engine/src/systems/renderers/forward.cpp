@@ -75,10 +75,16 @@ void ForwardRenderer::create_passes() {
     m_passes[BLOOM_PASS] = new Core::BloomPass(m_device, m_window->get_extent(), Core::ResourceManager::VIGNETTE);
     m_passes[BLOOM_PASS]->set_image_dependace_table({{iVec2(SSS_PASS, 0), {0u, 1u}}});
 
+    // Use the actual swapchain format for default (swapchain-backed) passes.
+    // The driver may select a different format (e.g. B8G8R8A8_UNORM) when the
+    // requested colorFormat (R8G8B8A8_SRGB) is not available.
+    const ColorFormatType presentFormat =
+        static_cast<ColorFormatType>(m_device->get_swapchain().get_image_format());
+
     // Tonemapping
     m_passes[TONEMAPPIN_PASS] = new Core::PostProcessPass(m_device,
                                                           m_window->get_extent(),
-                                                          m_settings.colorFormat,
+                                                          presentFormat,
                                                           Core::ResourceManager::VIGNETTE,
                                                           ENGINE_RESOURCES_PATH "shaders/misc/tonemapping.glsl",
                                                           "TONEMAPPING",
@@ -88,7 +94,7 @@ void ForwardRenderer::create_passes() {
     // FXAA Pass
     m_passes[FXAA_PASS] = new Core::PostProcessPass(m_device,
                                                     m_window->get_extent(),
-                                                    m_settings.colorFormat,
+                                                    presentFormat,
                                                     Core::ResourceManager::VIGNETTE,
                                                     ENGINE_RESOURCES_PATH "shaders/aa/fxaa.glsl",
                                                     "FXAA",

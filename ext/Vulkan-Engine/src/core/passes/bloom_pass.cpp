@@ -208,8 +208,6 @@ void BloomPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32
                              ACCESS_SHADER_WRITE,
                              ACCESS_SHADER_READ,
                              STAGE_COMPUTE_SHADER);
-
-        m_descriptorPool.set_descriptor_write(&m_bloomImage, LAYOUT_SHADER_READ_ONLY_OPTIMAL, &m_imageDescriptorSet, 4);
     }
 
 ////////////////////////////////////////////////////////////
@@ -267,6 +265,13 @@ void BloomPass::link_previous_images(std::vector<Graphics::Image> images) {
     m_descriptorPool.set_descriptor_write(
         m_bloomMipmaps, LAYOUT_GENERAL, &m_imageDescriptorSet, 2, UNIFORM_STORAGE_IMAGE);
     m_descriptorPool.set_descriptor_write(m_bloomMipmaps, LAYOUT_GENERAL, &m_imageDescriptorSet, 3);
+
+    // Binding 4 = processed bloom image read in the final graphics pass.
+    // Set here (not in render()) so no vkUpdateDescriptorSets is called while a
+    // previous frame's command buffer still has this descriptor set bound.
+    // The pipeline_barrier in render() transitions the layout to SHADER_READ_ONLY
+    // before the shader accesses it, so the layout declared here is correct.
+    m_descriptorPool.set_descriptor_write(&m_bloomImage, LAYOUT_SHADER_READ_ONLY_OPTIMAL, &m_imageDescriptorSet, 4);
 }
 
 void BloomPass::update() {

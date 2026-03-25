@@ -17,6 +17,8 @@ VkFormat get(ColorFormatType colorFormatType) {
         return VK_FORMAT_R8G8B8A8_SRGB;
     case ColorFormatType::SBGRA_8:
         return VK_FORMAT_B8G8R8A8_SRGB;
+    case ColorFormatType::BGRA_8U:
+        return VK_FORMAT_B8G8R8A8_UNORM;
     case ColorFormatType::SR_16F:
         return VK_FORMAT_R16_SFLOAT;
     case ColorFormatType::SR_32F:
