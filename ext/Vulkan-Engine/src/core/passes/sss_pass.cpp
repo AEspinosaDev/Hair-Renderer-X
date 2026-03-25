@@ -2,7 +2,10 @@
 #include <engine/core/resource_manager.h>
 
 #include <cmath>
+
+#ifdef _WIN32
 #include "hair_voxelization_pass.cpp"
+#endif
 
 VULKAN_ENGINE_NAMESPACE_BEGIN
 using namespace Graphics;
