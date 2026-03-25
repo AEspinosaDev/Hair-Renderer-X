@@ -53,9 +53,8 @@ layout(location = 5) out vec3 g_dir;
 layout(location = 6) out vec3 g_modelDir;
 layout(location = 7) out vec3 g_color;
 layout(location = 8) out vec3 g_origin;
-layout(location = 9) out float g_coverage;
 
-void emitQuadPoint(vec4 origin, vec4 right, float offset, vec3 forward, vec3 normal, vec2 uv, int id, float coverage) {
+void emitQuadPoint(vec4 origin, vec4 right, float offset, vec3 forward, vec3 normal, vec2 uv, int id) {
 
     vec4 newPos   = origin + right * offset; // Model space
     gl_Position   = camera.viewProj * newPos;
@@ -68,7 +67,6 @@ void emitQuadPoint(vec4 origin, vec4 right, float offset, vec3 forward, vec3 nor
     g_normal      = normalize(mat3(transpose(inverse(camera.view))) * normal);
     g_modelNormal = normal;
     g_origin      = (camera.view * origin).xyz;
-    g_coverage    = coverage;
 
     EmitVertex();
 }
@@ -124,10 +122,10 @@ void main() {
 
     float halfLength = material.thickness * 0.5;
 
-    emitQuadPoint(startPoint, right0, halfLength, dir0, normal0, v_uv[0], 0, finalAlpha);
-    emitQuadPoint(endPoint, right1, halfLength, dir1, normal1, v_uv[1], 1, finalAlpha);
-    emitQuadPoint(startPoint, -right0, halfLength, dir0, normal0, v_uv[0], 0, finalAlpha);
-    emitQuadPoint(endPoint, -right1, halfLength, dir1, normal1, v_uv[1], 1, finalAlpha);
+    emitQuadPoint(startPoint, right0, halfLength, dir0, normal0, v_uv[0], 0);
+    emitQuadPoint(endPoint, right1, halfLength, dir1, normal1, v_uv[1], 1);
+    emitQuadPoint(startPoint, -right0, halfLength, dir0, normal0, v_uv[0], 0);
+    emitQuadPoint(endPoint, -right1, halfLength, dir1, normal1, v_uv[1], 1);
 }
 
 #shader fragment
@@ -152,7 +150,6 @@ layout(location = 5) in vec3 g_dir;
 layout(location = 6) in vec3 g_modelDir;
 layout(location = 7) in vec3 g_color;
 layout(location = 8) in vec3 g_origin;
-layout(location = 9) in float g_coverage;
 
 // Uniforms
 layout(set = 0, binding = 2) uniform sampler2DArray shadowMap;

@@ -139,7 +139,7 @@ void HairVoxelizationPass::setup_uniforms(std::vector<Graphics::Frame>& frames) 
     m_descriptorPool.set_layout(2,
                                 {bindlessVAOs, bindlessIBOs},
                                 0,
-                                {VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT,
+                                {VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT,
                                  VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT});
 
     for (size_t i = 0; i < frames.size(); i++)
