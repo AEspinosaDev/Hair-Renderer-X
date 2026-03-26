@@ -45,18 +45,18 @@ Output: single SRGBA_32F attachment (scattered HDR color, fed to Bloom next).
 */
 class SSSPass : public BasePass
 {
-    static constexpr uint32_t MAX_SAMPLES = 25;
+    static constexpr uint32_t MAX_SAMPLES = 64;
 
     // Must match std140 layout declared in ssss.glsl (binding 6)
     struct SSSUniforms {
-        Vec4  samples[MAX_SAMPLES]; // xy = (r, theta), zw = unused
+        Vec4  samples[MAX_SAMPLES]; // xy = (theta, r), zw = unused (vec4 for std140 array padding)
         int   sampleCount;
         float maxScatter;           // world-space scatter radius scale
         float extinctionCoeff;      // Beer-Lambert extinction coefficient
         float Fdr;                  // internal Fresnel diffuse reflectance
         Vec4  scatteringDistance;   // rgb = per-channel scatter distance, a = 0
         Vec2  screenSize;
-        float _pad0[2];
+        Vec2 _pad0;
         Mat4  projection;
         Mat4  invProjection;
     };
@@ -73,13 +73,13 @@ class SSSPass : public BasePass
     Graphics::Image m_brightImage;      // pass-through to Bloom (att 1 output)
     Graphics::Image m_aoThicknessImage;
 
-    std::vector<Vec4> m_samples; // CPU-side sample positions, uploaded to UBO
+    std::vector<Vec4> m_samples; // CPU-side samples, uploaded to UBO
 
     // Parameters
     int   m_sampleCount        = static_cast<int>(MAX_SAMPLES);
-    float m_maxScatter         = 1.0f;
-    float m_extinctionCoeff    = 1.0f;
-    float m_Fdr                = 0.6f;
+    float m_maxScatter         = 0.05f;
+    float m_extinctionCoeff    = 3.0f;
+    float m_Fdr                = 0.028f;
     Vec3  m_scatteringDistance = Vec3(0.75f, 0.32f, 0.15f); // skin default (R,G,B)
     int   m_sssEnabled         = 1; // separate from m_enabled; controls UBO flag
 

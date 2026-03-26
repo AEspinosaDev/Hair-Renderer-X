@@ -2,10 +2,25 @@
 #include <engine/core/resource_manager.h>
 
 #include <cmath>
+#include <chrono>
 
 #ifdef _WIN32
 #include "hair_voxelization_pass.cpp"
 #endif
+#include <random>
+
+class MonteCarloRandom {
+private:
+    std::mt19937_64 generator;
+    std::uniform_real_distribution<double> distribution;
+
+public:
+    MonteCarloRandom(long long seed) : generator(seed), distribution(0.0, 1.0) {}
+
+    double getRandomInRange(double min, double max) {
+        return min + (max - min) * distribution(generator);
+    }
+};
 
 VULKAN_ENGINE_NAMESPACE_BEGIN
 using namespace Graphics;
@@ -15,47 +30,32 @@ namespace Core {
 // CPU-side helpers
 // ---------------------------------------------------------------------------
 
-float SSSPass::burley_cdf_inverse(float u) {
-    // Burley normalized diffusion profile (unit scatter distance d = 1):
-    //   p(r) = (exp(-r) + exp(-r/3)) / 4     (marginal radial density)
-    //   CDF(r) = 1 - (exp(-r) + 3*exp(-r/3)) / 4
-    //   CCDF(r) = (exp(-r) + 3*exp(-r/3)) / 4
-    //
-    // Invert CDF via bisection: find r s.t. CCDF(r) = 1 - u
-    const float target = 1.0f - u;
-    float       lo = 0.0f, hi = 20.0f; // 20 scatter distances covers >99.9% of profile energy
-
-    for (int i = 0; i < 64; i++)
-    {
-        float mid  = 0.5f * (lo + hi);
-        float ccdf = (std::exp(-mid) + 3.0f * std::exp(-mid / 3.0f)) / 4.0f;
-
-        // CCDF is monotone decreasing; larger r → smaller ccdf
-        if (ccdf > target)
-            lo = mid;
-        else
-            hi = mid;
-
-        if (hi - lo < 1e-5f)
-            break;
-    }
-    return 0.5f * (lo + hi);
-}
-
 void SSSPass::generate_samples() {
-    // Fibonacci lattice: well-distributed angles + importance-sampled radii
+	// Fibonacci lattice: well-distributed angles + importance-sampled radii
     const float PHI          = 1.6180339887f;
-    const float GOLDEN_ANGLE = 2.0f * static_cast<float>(M_PI) * (1.0f - 1.0f / PHI);
-
+    float randomRange = 1.0 / static_cast<float>(MAX_SAMPLES);
     m_samples.resize(MAX_SAMPLES);
-    for (uint32_t i = 0; i < MAX_SAMPLES; i++)
-    {
-        // Stratified sample in [0,1] mapped through the Burley CDF inverse
-        float u     = (static_cast<float>(i) + 0.5f) / static_cast<float>(MAX_SAMPLES);
-        float r     = burley_cdf_inverse(u); // in units of scatter distance
-        float theta = GOLDEN_ANGLE * static_cast<float>(i);
 
-        m_samples[i] = Vec4(r, theta, 0.0f, 0.0f);
+    for (uint32_t i = 0; i < MAX_SAMPLES; i++) {
+        // Sample theta in polar coordinates with Fibonacci lattice
+        float x = std::fmod((static_cast<float>(i + 1) / PHI), 1.0);
+        float theta = 2.0 * M_PI * x;
+
+        // Sample r in polar coordinates with CCDF
+    	auto now = std::chrono::system_clock::now();
+    	long long timeSeed = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+		MonteCarloRandom monteCarloRandom(timeSeed);
+        float y = 1.0 - monteCarloRandom.getRandomInRange(0.0, 1.0);
+        
+        y = y * randomRange + static_cast<float>(i) * randomRange; // Ordered random
+        float Gr = 1.0 + 4.0 * y * (2.0 * y + std::sqrt(1.0 + 4.0 * std::pow(y, 2.0)));
+        
+        // samples[2 * i + 1] = 3.0 * Math.log(...)
+        float term1 = std::pow(Gr, -1.0 / 3.0);
+        float term2 = std::pow(Gr, 1.0 / 3.0);
+        float r = 3.0 * std::log((1.0 + term1 + term2) / (4.0 * y));
+
+		m_samples[i] = Vec4(theta, r, 0.0f, 0.0f);
     }
 }
 

@@ -28,9 +28,8 @@ layout(set = 0, binding = 7) uniform sampler2D brightTex;     // Bright pass-thr
 
 // --- Uniform block (std140, binding 6) --------------------------------------
 layout(set = 0, binding = 6) uniform SSSBlock {
-    // xy = (r [importance-sampled from Burley CDF], theta [golden angle])
-    // zw = unused (vec4 for std140 array padding)
-    vec4  samples[25];
+    // xy = (theta, r), zw = unused (vec4 for std140 array padding)
+    vec4  samples[64];
 
     int   sampleCount;
     float maxScatter;       // world-space scatter radius scale
@@ -40,9 +39,8 @@ layout(set = 0, binding = 6) uniform SSSBlock {
     vec4  scatteringDistance; // rgb = per-channel scatter distance in world units
 
     vec2  screenSize;
-    float _pad0[2];
 
-    mat4 projection;
+    layout(offset = 1072) mat4 projection;
     mat4 invProjection;
 } sss;
 
@@ -52,23 +50,16 @@ layout(location = 1) out vec4 outBright; // pass-through to Bloom
 
 // ----------------------------------------------------------------------------
 const float PI  = 3.14159265358979323846;
-const float EPS = 0.001;
+const float EPS = 1e-6;
 
-// Burley normalized diffusion profile (per-channel)
-//   R(r, d) = (exp(-r/d) + exp(-r/(3d))) / (8π r d)
-// Returns the unnormalized weight vector for importance-sampling normalization.
-vec3 burleyWeight(float r, vec3 d) {
-    r = max(r, EPS);
-    d = max(d, vec3(EPS));
-    return (exp(-r / d) + exp(-r / (3.0 * d))) / (8.0 * PI * r * d);
+float random(vec2 st) 
+{
+  return fract(sin(dot(st, vec2(12.9898, 78.233))) * 43758.5453123);
 }
 
-// Reconstruct view-space position from screen UV and depth.
-// Engine uses perspectiveRH_ZO so depth is already in [0,1] — no remapping.
-vec3 reconstructPosition(vec2 uv, float depth) {
-    vec4 clip    = vec4(uv * 2.0 - 1.0, depth, 1.0);
-    vec4 viewPos = sss.invProjection * clip;
-    return viewPos.xyz / viewPos.w;
+vec3 Rr(vec3 d, float r) // Burley's Normalized Diffusion Model
+{ 
+  return (exp(-r / d) + exp(-r / (d * 3.0))) / (8.0 * PI * d * r);
 }
 
 // ----------------------------------------------------------------------------
@@ -104,8 +95,8 @@ void main() {
         return;
     }
 
-    vec3 fragPos     = reconstructPosition(v_uv, depth);
-    vec3 scatterDist = sss.scatteringDistance.rgb;
+    vec3 scatterDist = sss.scatteringDistance.rgb * sss.maxScatter;
+	float maxRadius = max(scatterDist.r, max(scatterDist.g, scatterDist.b));
 
     // -------------------------------------------------------------------------
     // Multiple scattering
@@ -116,34 +107,46 @@ void main() {
     // We replace the local diffuse term with the scattered diffuse integral
     // and keep everything else (specular, ambient) unchanged.
     // -------------------------------------------------------------------------
-    vec3 nonDiffuse = hdr.rgb - albedo * diffIrr; // specular + ambient
+    vec3 nonDiffuse = max(hdr.rgb - albedo * diffIrr, vec3(0.0)); // specular + ambient (HDR, no upper clamp)
+
+	// View fragment position computation (perspectiveRH_ZO: depth already in [0,1])
+  	vec2 fragCoords = v_uv * 2.0 - vec2(1.0);
+  	vec4 viewSpacePos = sss.invProjection * vec4(fragCoords, depth, 1.0);
+  	vec3 fragViewPos = viewSpacePos.xyz / viewSpacePos.w;
+
+	float jitter = 2.0 * PI * random(mod(v_uv * sss.screenSize, float(sss.sampleCount)));
 
     vec3 scatteredIrr = vec3(0.0);
     vec3 totalWeight  = vec3(0.0);
 
     for (int i = 0; i < sss.sampleCount; i++) {
-        // r is in units of scatter distance; scale to world/view space
-        float r     = sss.samples[i].x * sss.maxScatter;
-        float theta = sss.samples[i].y;
-        vec2  disk  = vec2(cos(theta), sin(theta)) * r;
+		float theta = sss.samples[i].x + jitter;
+        float r     = sss.samples[i].y * maxRadius;
+        vec2  sampleOffset  = vec2(cos(theta), sin(theta)) * r;
 
         // Offset the view-space fragment position in the XY plane (lateral scatter)
-        vec4 sampleClip = sss.projection * vec4(fragPos + vec3(disk, 0.0), 1.0);
-        sampleClip.xyz /= sampleClip.w;
-        vec2 sampleUV = clamp(sampleClip.xy * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+        vec4 sampleProjected = sss.projection * vec4(fragViewPos + vec3(sampleOffset, 0.0), 1.0);
+        vec2 sampleCoords = sampleProjected.xy / sampleProjected.w;
+        vec2 sampleUV = (sampleCoords + 1.0) * 0.5;
 
-        vec3 sampleAlbedo  = texture(albedoMaskTex, sampleUV).rgb;
-        vec3 sampleDiffIrr = texture(diffuseIrrTex, sampleUV).rgb;
+		float sampleDepth = texture(depthTex, sampleUV).r;
+    	viewSpacePos = sss.invProjection * vec4(sampleCoords, sampleDepth, 1.0);
+    	vec3 sampleViewPos = viewSpacePos.xyz / viewSpacePos.w;
 
-        // Per-channel Burley weight — normalised below to handle spectral bias
-        vec3 w = burleyWeight(r, scatterDist);
+    	float radialDistance = max(distance(sampleViewPos, fragViewPos), EPS);
 
-        scatteredIrr += sampleAlbedo * sampleDiffIrr * w;
-        totalWeight  += w;
+        // Per-channel Burley weight — normalized below to handle spectral bias
+        vec3 rRr = radialDistance * Rr(scatterDist, radialDistance);
+		vec3 pr = r * Rr(vec3(maxRadius), r);
+		vec3 diffusion = rRr / pr;
+		totalWeight += diffusion;
+
+		vec3 sampleDiffIrr = texture(diffuseIrrTex, sampleUV).rgb;
+        scatteredIrr += diffusion * sampleDiffIrr;
     }
 
     // Normalize per channel
-    scatteredIrr /= max(totalWeight, vec3(EPS));
+	scatteredIrr = albedo * (scatteredIrr / max(totalWeight, vec3(EPS)));
 
     // Modulate by AO
     scatteredIrr *= ao;
@@ -152,12 +155,11 @@ void main() {
     // Single scattering (translucency via Beer-Lambert)
     // -------------------------------------------------------------------------
     float transmittance = exp(-thick * sss.extinctionCoeff);
-    vec3  singleScatter = (1.0 - sss.Fdr) * albedo * backIrr * transmittance;
+    vec3  singleScatter = sss.scatteringDistance.rgb * transmittance * backIrr;
 
     // -------------------------------------------------------------------------
     // Combine and output
     // -------------------------------------------------------------------------
     outColor  = vec4(nonDiffuse + scatteredIrr + singleScatter, hdr.a);
-    // outColor  = vec4(ao, thick, 0.0, hdr.a);
     outBright = texture(brightTex, v_uv);
 }
