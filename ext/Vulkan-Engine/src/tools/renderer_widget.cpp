@@ -92,21 +92,15 @@ void Tools::ForwardRendererWidget::render() {
 
     ImGui::Separator();
     ImGui::SeparatorText("SSAO");
-    bool ssaoEnabled = m_renderer->get_ssao_active();
-    if (ImGui::Checkbox("Enable SSAO", &ssaoEnabled))
-        m_renderer->set_ssao_active(ssaoEnabled);
-    if (ssaoEnabled)
-    {
-        float ssaoRadius = m_renderer->get_ssao_radius();
-        if (ImGui::DragFloat("SSAO Radius", &ssaoRadius, 0.01f, 0.0f, 2.0f))
-            m_renderer->set_ssao_radius(ssaoRadius);
-        float ssaoBias = m_renderer->get_ssao_bias();
-        if (ImGui::DragFloat("SSAO Bias", &ssaoBias, 0.001f, 0.0f, 0.1f))
-            m_renderer->set_ssao_bias(ssaoBias);
-        int ssaoKernel = m_renderer->get_ssao_kernel_size();
-        if (ImGui::DragInt("SSAO Kernel Size", &ssaoKernel, 1, 1, 64))
-            m_renderer->set_ssao_kernel_size(ssaoKernel);
-    }
+    float ssaoRadius = m_renderer->get_ssao_radius();
+    if (ImGui::DragFloat("SSAO Radius", &ssaoRadius, 0.01f, 0.0f, 2.0f))
+        m_renderer->set_ssao_radius(ssaoRadius);
+    float ssaoBias = m_renderer->get_ssao_bias();
+    if (ImGui::DragFloat("SSAO Bias", &ssaoBias, 0.001f, 0.0f, 0.1f))
+        m_renderer->set_ssao_bias(ssaoBias);
+    int ssaoKernel = m_renderer->get_ssao_kernel_size();
+    if (ImGui::DragInt("SSAO Kernel Size", &ssaoKernel, 1, 1, 64))
+        m_renderer->set_ssao_kernel_size(ssaoKernel);
 
     ImGui::Separator();
     ImGui::SeparatorText("SSS");

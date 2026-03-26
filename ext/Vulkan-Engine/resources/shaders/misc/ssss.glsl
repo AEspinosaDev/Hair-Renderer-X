@@ -92,6 +92,12 @@ void main() {
     float ao      = aoThick.r;
     float thick   = aoThick.g;
 
+	if (sss.sampleCount == 0) {
+        outColor  = texture(hdrTex, v_uv) * ao;
+        outBright = texture(brightTex, v_uv);
+        return;
+    }
+
     if (depth >= 1.0) {   // background — should not happen for masked pixels, be safe
         outColor  = hdr;
         outBright = texture(brightTex, v_uv);
@@ -152,5 +158,6 @@ void main() {
     // Combine and output
     // -------------------------------------------------------------------------
     outColor  = vec4(nonDiffuse + scatteredIrr + singleScatter, hdr.a);
+    // outColor  = vec4(ao, thick, 0.0, hdr.a);
     outBright = texture(brightTex, v_uv);
 }

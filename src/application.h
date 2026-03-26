@@ -25,7 +25,7 @@ class HairViewer
     Camera*                camera;
     Tools::Controller*     m_controller;
 
-    bool animateLight{true};
+    bool animateLight{false};
 
     int m_maxFrames{0};
     int m_frameCount{0};

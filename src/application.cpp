@@ -53,7 +53,7 @@ void HairViewer::setup() {
     m_scene = new Scene(camera);
 
     PointLight* light = new PointLight();
-    light->set_position({-1.3f, 8.0f, -5.8f});
+    light->set_position({-5.5f, 1.0f, 4.0f});
     light->set_shadow_fov(120.0f);
     light->set_intensity(1.0f);
     light->set_shadow_bias(0.0002f);

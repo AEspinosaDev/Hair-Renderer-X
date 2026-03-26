@@ -173,7 +173,8 @@ void SSSPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32_t
     SSSUniforms data{};
     for (uint32_t i = 0; i < MAX_SAMPLES; i++)
         data.samples[i] = m_samples[i];
-    data.sampleCount        = m_sampleCount;
+    // sampleCount == 0 signals passthrough to the shader when SSS is disabled
+    data.sampleCount        = (m_sssEnabled != 0) ? m_sampleCount : 0;
     data.maxScatter         = m_maxScatter;
     data.extinctionCoeff    = m_extinctionCoeff;
     data.Fdr                = m_Fdr;

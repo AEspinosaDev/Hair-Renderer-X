@@ -124,7 +124,7 @@ class ForwardRenderer : public BaseRenderer
         if (m_passes[SSAO_PASS]) m_passes[SSAO_PASS]->set_active(v);
     }
     inline bool get_sss_active() const {
-        if (m_passes[SSS_PASS]) return m_passes[SSS_PASS]->is_active();
+        if (m_passes[SSS_PASS]) return static_cast<Core::SSSPass*>(m_passes[SSS_PASS])->is_sss_enabled();
         return false;
     }
     inline void set_sss_active(bool v) {

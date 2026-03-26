@@ -81,6 +81,7 @@ class SSSPass : public BasePass
     float m_extinctionCoeff    = 1.0f;
     float m_Fdr                = 0.6f;
     Vec3  m_scatteringDistance = Vec3(0.75f, 0.32f, 0.15f); // skin default (R,G,B)
+    int   m_sssEnabled         = 1; // separate from m_enabled; controls UBO flag
 
     void        generate_samples();
     static float burley_cdf_inverse(float u);
@@ -91,6 +92,10 @@ class SSSPass : public BasePass
         , m_vignette(vignette) {
         generate_samples();
     }
+
+    // Always render (pass-through when disabled) so the downstream chain keeps running
+    inline void set_active(const bool s) override { m_sssEnabled = s ? 1 : 0; }
+    inline bool is_sss_enabled() const { return m_sssEnabled != 0; }
 
     inline int   get_sample_count() const { return m_sampleCount; }
     inline void  set_sample_count(int n) { m_sampleCount = glm::clamp(n, 1, static_cast<int>(MAX_SAMPLES)); }
