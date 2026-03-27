@@ -106,46 +106,7 @@ Hair shaders write `scatterMask = 0.0` to attachment 3 alpha. The SSS pass skips
 - std140 UBO mismatch: `vec2 samples[]` → `vec4 samples[]` in GLSL and C++
 - Missing `#include <chrono>`
 
-**Known issue — fixed in Phase 2 Task 1**: SSS shader used `depth * 2.0 - 1.0` for NDC reconstruction (incorrect for Vulkan ZO) and negated z. Fixed to use depth directly, matching the SSAO pattern.
-
 ---
 
 ## Phase 2 Tasks
 
-### Task 1 — Fix SSS view-space reconstruction and diffuse extraction
-
-The SSS shader (`ssss.glsl`) produces distorted output (diagonal seam across the face, incorrect scattering) because view-space positions are reconstructed incorrectly from depth. A secondary issue clips HDR specular in the non-diffuse extraction.
-
-**Subtask A — Fix depth → view-space reconstruction (projection bug)**
-
-The shader uses an OpenGL-style unproject that is wrong for Vulkan ZO (`perspectiveRH_ZO` + Y-flip):
-
-```glsl
-// CURRENT (wrong):
-float z = depth * 2.0 - 1.0;                                    // remaps [0,1] → [-1,1]
-vec4 viewSpacePos = sss.invProjection * vec4(fragCoords, -z, 1.0); // negates z
-```
-
-The SSAO shader (`ssao_thickness.glsl:45-49`) already has the correct formula:
-
-```glsl
-// CORRECT:
-vec4 clipPos = vec4(uv * 2.0 - 1.0, depth, 1.0);  // depth stays in [0,1]
-vec4 viewPos = ssao.invProjection * clipPos;
-return viewPos.xyz / viewPos.w;
-```
-
-Fixes needed in `ssss.glsl`:
-1. Center pixel (line 109–112): remove `* 2.0 - 1.0` on depth, remove `-z` negation → use `vec4(fragCoords, depth, 1.0)`
-2. Sample pixel (line 127–129): same fix — use raw depth and `sampleCoords` without negation → `vec4(sampleCoords, sampleDepth, 1.0)`
-
-**Subtask B — Remove HDR clamp on non-diffuse extraction**
-
-```glsl
-// CURRENT (clips specular):
-vec3 nonDiffuse = clamp(hdr.rgb - albedo * diffIrr, 0.0, 1.0);
-```
-
-The `clamp(..., 0.0, 1.0)` upper-bounds specular highlights to 1.0, killing HDR values that Bloom needs. Change to `max(..., 0.0)` to keep the lower bound (preventing negatives from precision drift) but allow HDR values through.
-
-**Validation**: rebuild, run `--frames 10 --log-level warn`, verify no new validation errors. Visual check: the diagonal seam should disappear and skin should show smooth subsurface scattering.

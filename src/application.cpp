@@ -53,7 +53,7 @@ void HairViewer::setup() {
     m_scene = new Scene(camera);
 
     PointLight* light = new PointLight();
-    light->set_position({-5.5f, 1.0f, 4.0f});
+    light->set_position({-5.0f, 1.0f, -5.0f});
     light->set_shadow_fov(120.0f);
     light->set_intensity(1.0f);
     light->set_shadow_bias(0.0002f);
@@ -91,8 +91,10 @@ void HairViewer::setup() {
 #else
     Mesh* hair = new Mesh();
     Tools::Loaders::load_3D_file(hair, MESH_PATH + "straight.hair", false);
-    hair->set_scale(0.053f);
-    hair->set_rotation({90.0, 180.0f, 0.0f});
+	hair->set_position({0.0f, 2.9f, 0.0f});
+    // hair->set_scale(0.053f);
+    hair->set_scale(0.025f);
+    hair->set_rotation({90.0, 180.0f, -90.0f});
     // HairDisneyMaterial* hmat = new HairDisneyMaterial();
     HairEpicMaterial* hmat = new HairEpicMaterial();
     hmat->set_thickness(0.0015f);
@@ -109,35 +111,38 @@ void HairViewer::setup() {
     // hair2->set_name("Hair Curly");
     // hair2->set_active(false);
 
-    Mesh* head = new Mesh();
-    Tools::Loaders::load_3D_file(head, MESH_PATH + "head.ply", false);
-     head->set_scale(0.053f);
-    head->set_rotation({90.0, 180.0f, 0.0f});
-    auto     headMat    = new PhysicallyBasedMaterial();
-    Texture* headAlbedo = new Texture();
-    Tools::Loaders::load_texture(headAlbedo, TEXTURE_PATH + "head.png");
-    headMat->set_albedo_texture(headAlbedo);
-    headMat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
-    headMat->set_albedo_weight(0.75f);
-    headMat->set_metalness(0.0f);
-    headMat->set_roughness(0.5f);
-    head->push_material(headMat);
-    head->set_name("Head");
-    Mesh* eyes = new Mesh();
-    Tools::Loaders::load_3D_file(eyes, MESH_PATH + "eyes.ply");
-    auto eyesMat = new PhysicallyBasedMaterial();
-    eyes->push_material(eyesMat);
-    Texture* eyesAlbedo = new Texture();
-    Tools::Loaders::load_texture(eyesAlbedo, TEXTURE_PATH + "eye.png");
-    eyesMat->set_albedo_texture(eyesAlbedo);
-    eyesMat->set_metalness(0.0f);
-    eyesMat->set_roughness(0.1f);
-    eyes->set_name("Eyes");
-    head->add_child(eyes);
+    Mesh* alex = new Mesh();
+    // Tools::Loaders::load_3D_file(alex, MESH_PATH + "head.ply", false);
+    Tools::Loaders::load_3D_file(alex, MESH_PATH + "alex.ply", false);
+	// alex->set_scale(0.053f);
+	alex->set_scale(10.0f);
+    // alex->set_rotation({90.0, 180.0f, -90.0f});
+    alex->set_rotation({90.0, 180.0f, 0.0f});
+    auto     alexMat    = new PhysicallyBasedMaterial();
+    Texture* alexAlbedo = new Texture();
+    Tools::Loaders::load_texture(alexAlbedo, TEXTURE_PATH + "head.png");
+    alexMat->set_albedo_texture(alexAlbedo);
+    alexMat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
+    alexMat->set_albedo_weight(0.75f);
+    alexMat->set_metalness(0.0f);
+    alexMat->set_roughness(0.5f);
+    alex->push_material(alexMat);
+    alex->set_name("Head");
+    // Mesh* eyes = new Mesh();
+    // Tools::Loaders::load_3D_file(eyes, MESH_PATH + "eyes.ply");
+    // auto eyesMat = new PhysicallyBasedMaterial();
+    // eyes->push_material(eyesMat);
+    // Texture* eyesAlbedo = new Texture();
+    // Tools::Loaders::load_texture(eyesAlbedo, TEXTURE_PATH + "eye.png");
+    // eyesMat->set_albedo_texture(eyesAlbedo);
+    // eyesMat->set_metalness(0.0f);
+    // eyesMat->set_roughness(0.1f);
+    // eyes->set_name("Eyes");
+    // alex->add_child(eyes);
 
     // hmat->set_skull(head);
     // head->add_child(hair);
-    m_scene->add(head);
+    m_scene->add(alex);
     m_scene->add(hair);
     // m_scene->add(hair2);
 #endif

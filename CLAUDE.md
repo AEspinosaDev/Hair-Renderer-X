@@ -86,6 +86,63 @@ Resources flow between passes through the dependency table + `link_previous_imag
 - **RHI** (`Graphics/` folder): Low-level Vulkan abstraction (device, swapchain, command buffers, images, descriptors). Should generally remain untouched.
 - Uses classic `VkRenderPass` objects, **not** `VK_KHR_dynamic_rendering`.
 
+### Asset Loading
+
+All loading goes through `Tools::Loaders::load_3D_file()` (`ext/Vulkan-Engine/src/tools/loaders.cpp`), which dispatches by file extension:
+
+| Format | Extension | Library | Use |
+|--------|-----------|---------|-----|
+| OBJ | `.obj` | tinyobj_loader | Generic meshes (engine built-ins, lights) |
+| PLY | `.ply` | tinyply | Head, eye, and neural-hair meshes |
+| HAIR | `.hair` | Custom binary | Strand hair geometry |
+
+`FBX` is defined in `common.h` but **not implemented**.
+
+**Hair loading** has two paths:
+- **Standard strands** (`.hair`): `load_hair()` reads the custom binary format (4-byte `"HAIR"` signature, header, packed point/segment arrays). Converts strand segments to triangulated geometry with tangents.
+- **Neural hair** (`.ply`): `hair_loaders::load_neural_hair()` (`src/hair_loader.cpp`) parses PLY with tinyply, then applies strand-aware processing (100 verts/strand, tangent = direction to next vertex, random per-strand UV/color).
+
+`load_3D_file()` accepts an `asynCall` flag (default `true`). Most loads in `application.cpp` pass `false` (synchronous). Neural hair is detached onto its own `std::thread`.
+
+Loaded data flows: `Vertex[]` + `uint32_t[]` → `Core::Geometry::fill()` → `Core::Mesh::push_geometry()` → scene.
+
+
+### Scene Selection
+
+There is **no runtime CLI argument to switch scenes**. Each application is its own binary. The main build (`HairViewer`) is always the hair renderer.
+
+#### Within HairViewer — `USE_NEURAL_MODELS` define
+
+`src/application.cpp` line 4 has a commented-out define:
+
+```cpp
+// #define USE_NEURAL_MODELS
+```
+
+- **Disabled (default)**: loads `straight.hair` + `head.ply` + `eyes.ply` with conventional PBR/hair materials.
+- **Enabled**: calls `load_neural_avatar()` with `.ply` hair/head files (neural network-generated geometry). The specific avatar files are hardcoded in the `#ifdef` block (TONO, PABLO, TONY variants). Uncomment/swap lines there to select a different neural avatar.
+
+#### Engine example applications
+
+The engine ships four standalone demos under `ext/Vulkan-Engine/examples/`. They are **disabled by default** in the main build (`set(BUILD_EXAMPLES OFF ...)` in root `CMakeLists.txt`). To build them:
+
+```bash
+cmake -DBUILD_EXAMPLES=ON ..
+cmake --build .
+```
+
+This produces four separate executables alongside `HairViewer`:
+
+| Executable | Scene | Renderer |
+|------------|-------|----------|
+| `RendererApp` | General textured PBR scene, raytracing enabled | ForwardRenderer |
+| `LightingTest` | 10×10 grid of 100 point lights, stress test | DeferredRenderer |
+| `RaytracingApp` | Environment with torii/tower/droid, raytraced shadows | DeferredRenderer |
+| `RotatingKabuto` | Single Kabuto mesh rotating in place | ForwardRenderer |
+
+Each example has its own `main.cpp` + `application.cpp/h` under `ext/Vulkan-Engine/examples/<name>/`. They share the same `-aa`, `-gui` CLI flags as HairViewer but use `EXAMPLES_RESOURCES_PATH` for assets (separate resource directory under `ext/Vulkan-Engine/examples/resources/`).
+
+**No base class is shared** — `HairViewer` and the `Application` classes in the examples are independent parallel implementations of the same lifecycle pattern (`init → setup → tick loop → shutdown`).
 
 ## Workflow
 
