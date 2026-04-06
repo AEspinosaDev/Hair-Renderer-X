@@ -91,7 +91,7 @@ void HairViewer::setup() {
 #else
     Mesh* hair = new Mesh();
     Tools::Loaders::load_3D_file(hair, MESH_PATH + "straight.hair", false);
-	hair->set_position({0.0f, 2.9f, 0.0f});
+	hair->set_position({0.0f, 2.9f, -0.2f});
     // hair->set_scale(0.053f);
     hair->set_scale(0.025f);
     hair->set_rotation({90.0, 180.0f, -90.0f});
@@ -111,23 +111,23 @@ void HairViewer::setup() {
     // hair2->set_name("Hair Curly");
     // hair2->set_active(false);
 
-    Mesh* alex = new Mesh();
-    // Tools::Loaders::load_3D_file(alex, MESH_PATH + "head.ply", false);
-    Tools::Loaders::load_3D_file(alex, MESH_PATH + "alex.ply", false);
-	// alex->set_scale(0.053f);
-	alex->set_scale(10.0f);
-    // alex->set_rotation({90.0, 180.0f, -90.0f});
-    alex->set_rotation({90.0, 180.0f, 0.0f});
-    auto     alexMat    = new PhysicallyBasedMaterial();
-    Texture* alexAlbedo = new Texture();
-    Tools::Loaders::load_texture(alexAlbedo, TEXTURE_PATH + "head.png");
-    alexMat->set_albedo_texture(alexAlbedo);
-    alexMat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
-    alexMat->set_albedo_weight(0.75f);
-    alexMat->set_metalness(0.0f);
-    alexMat->set_roughness(0.5f);
-    alex->push_material(alexMat);
-    alex->set_name("Head");
+    Mesh* human = new Mesh();
+    // Tools::Loaders::load_3D_file(human , MESH_PATH + "head.ply", false);
+    Tools::Loaders::load_3D_file(human, MESH_PATH + "alex.ply", false);
+	// human ->set_scale(0.053f);
+    human->set_scale(10.0f);
+    // human ->set_rotation({90.0, 180.0f, -90.0f});
+    human->set_rotation({90.0, 180.0f, 0.0f});
+    auto humanMat        = new PhysicallyBasedMaterial();
+    Texture* humanAlbedo = new Texture();
+    Tools::Loaders::load_texture(humanAlbedo, TEXTURE_PATH + "alex.png");
+    humanMat->set_albedo_texture(humanAlbedo);
+    humanMat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
+    humanMat->set_albedo_weight(0.75f);
+    humanMat->set_metalness(0.0f);
+    humanMat->set_roughness(0.5f);
+    human->push_material(humanMat);
+    human->set_name("Human");
     // Mesh* eyes = new Mesh();
     // Tools::Loaders::load_3D_file(eyes, MESH_PATH + "eyes.ply");
     // auto eyesMat = new PhysicallyBasedMaterial();
@@ -142,7 +142,7 @@ void HairViewer::setup() {
 
     // hmat->set_skull(head);
     // head->add_child(hair);
-    m_scene->add(alex);
+    m_scene->add(human);
     m_scene->add(hair);
     // m_scene->add(hair2);
 #endif
