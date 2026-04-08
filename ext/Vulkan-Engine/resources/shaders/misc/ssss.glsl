@@ -155,11 +155,12 @@ void main() {
     // Single scattering (translucency via Beer-Lambert)
     // -------------------------------------------------------------------------
     float transmittance = exp(-thick * sss.extinctionCoeff);
-    vec3  singleScatter = sss.scatteringDistance.rgb * transmittance * backIrr;
+    vec3  singleScatter = sss.Fdr * sss.scatteringDistance.rgb * transmittance * backIrr;
 
     // -------------------------------------------------------------------------
     // Combine and output
     // -------------------------------------------------------------------------
     outColor  = vec4(nonDiffuse + scatteredIrr + singleScatter, hdr.a);
+    //outColor = vec4(thick, 0.0, 0.0, 1.0);
     outBright = texture(brightTex, v_uv);
 }

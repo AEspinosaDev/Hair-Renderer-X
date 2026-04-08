@@ -120,8 +120,11 @@ void HairViewer::setup() {
     human->set_rotation({90.0, 180.0f, 0.0f});
     auto humanMat        = new PhysicallyBasedMaterial();
     Texture* humanAlbedo = new Texture();
+    //Texture* humanNormal = new Texture();
     Tools::Loaders::load_texture(humanAlbedo, TEXTURE_PATH + "alex.png");
+    //Tools::Loaders::load_texture(humanNormal, TEXTURE_PATH + "normal.png", TEXTURE_FORMAT_TYPE_NORMAL);
     humanMat->set_albedo_texture(humanAlbedo);
+    //humanMat->set_normal_texture(humanNormal);
     humanMat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
     humanMat->set_albedo_weight(0.75f);
     humanMat->set_metalness(0.0f);

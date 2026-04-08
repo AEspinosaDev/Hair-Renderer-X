@@ -107,6 +107,3 @@ Hair shaders write `scatterMask = 0.0` to attachment 3 alpha. The SSS pass skips
 - Missing `#include <chrono>`
 
 ---
-
-## Phase 2 Tasks
-

@@ -87,38 +87,6 @@ float occlusion(vec3 fragPos, vec3 normal, vec2 uv) {
     return 1.0 - (occ / float(ssao.kernelSize));
 }
 
-float thickness(vec3 fragPos, vec3 normal, vec2 uv) {
-    // Same as occlusion() but with the normal flipped — samples the back hemisphere
-    vec3 flippedNormal = -normal;
-
-    vec2 noiseScale = ssao.screenSize / 4.0;
-    vec3 randomVec  = normalize(vec3(texture(noiseTex, uv * noiseScale).rg * 2.0 - 1.0, 0.0));
-
-    vec3 tangent   = normalize(randomVec - flippedNormal * dot(randomVec, flippedNormal));
-    vec3 bitangent = cross(flippedNormal, tangent);
-    mat3 TBN       = mat3(tangent, bitangent, flippedNormal);
-
-    float thick = 0.0;
-    for (int i = 0; i < ssao.kernelSize; ++i)
-    {
-        vec3 samplePos = TBN * ssao.samples[i].xyz;
-        samplePos = fragPos + samplePos * ssao.radius;
-
-        vec4 offset = ssao.projection * vec4(samplePos, 1.0);
-        offset.xyz /= offset.w;
-        offset.xy = offset.xy * 0.5 + 0.5;
-
-        float sampleDepth   = texture(depthTex, offset.xy).r;
-        vec3  sampleViewPos = reconstructPosition(offset.xy, sampleDepth);
-
-        float rangeCheck = smoothstep(0.0, 1.0, ssao.radius / max(abs(fragPos.z - sampleViewPos.z), 0.001));
-
-        thick += (sampleViewPos.z >= samplePos.z + ssao.bias ? 1.0 : 0.0) * rangeCheck;
-    }
-
-    return thick / float(ssao.kernelSize);
-}
-
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -136,7 +104,7 @@ void main() {
     vec3 normal  = normalize(texture(normalsTex, v_uv).xyz);
 
     float ao    = occlusion(fragPos, normal, v_uv);
-    float thick = thickness(fragPos, normal, v_uv);
+    float thick = 1.0 - occlusion(fragPos, -normal, v_uv);
 
     outAOThickness = vec4(ao, thick, 0.0, 0.0);
 }
