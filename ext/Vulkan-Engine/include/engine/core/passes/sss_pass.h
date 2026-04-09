@@ -10,6 +10,7 @@
 #define SSS_PASS_H
 
 #include <engine/core/passes/pass.h>
+#include <engine/core/textures/textureLDR.h>
 
 VULKAN_ENGINE_NAMESPACE_BEGIN
 
@@ -54,9 +55,8 @@ class SSSPass : public BasePass
         float maxScatter;           // world-space scatter radius scale
         float extinctionCoeff;      // Beer-Lambert extinction coefficient
         float Fdr;                  // internal Fresnel diffuse reflectance
-        Vec4  scatteringDistance;   // rgb = per-channel scatter distance, a = 0
         Vec2  screenSize;
-        Vec2 _pad0;
+        Vec2  _pad0;                // align projection to 16-byte boundary at offset 1056
         Mat4  projection;
         Mat4  invProjection;
     };
@@ -73,15 +73,16 @@ class SSSPass : public BasePass
     Graphics::Image m_brightImage;      // pass-through to Bloom (att 1 output)
     Graphics::Image m_aoThicknessImage;
 
+    Core::Texture* m_scatterDistLUT = nullptr; // 5-pixel thin→thick LUT (binding 8)
+
     std::vector<Vec4> m_samples; // CPU-side samples, uploaded to UBO
 
     // Parameters
-    int   m_sampleCount        = static_cast<int>(MAX_SAMPLES);
-    float m_maxScatter         = 0.05f;
-    float m_extinctionCoeff    = 3.0f;
-    float m_Fdr                = 0.028f;
-    Vec3  m_scatteringDistance = Vec3(0.75f, 0.32f, 0.15f); // skin default (R,G,B)
-    int   m_sssEnabled         = 1; // separate from m_enabled; controls UBO flag
+    int   m_sampleCount     = static_cast<int>(MAX_SAMPLES);
+    float m_maxScatter      = 0.05f;
+    float m_extinctionCoeff = 3.0f;
+    float m_Fdr             = 0.028f;
+    int   m_sssEnabled      = 1; // separate from m_enabled; controls UBO flag
 
     void        generate_samples();
     static float burley_cdf_inverse(float u);
@@ -105,8 +106,8 @@ class SSSPass : public BasePass
     inline void  set_extinction_coeff(float e) { m_extinctionCoeff = e; }
     inline float get_Fdr() const { return m_Fdr; }
     inline void  set_Fdr(float f) { m_Fdr = f; }
-    inline Vec3  get_scattering_distance() const { return m_scatteringDistance; }
-    inline void  set_scattering_distance(Vec3 d) { m_scatteringDistance = d; }
+
+    void load_scatter_lut(const std::string& path);
 
     void setup_attachments(std::vector<Graphics::AttachmentInfo>&    attachments,
                            std::vector<Graphics::SubPassDependency>& dependencies) override;

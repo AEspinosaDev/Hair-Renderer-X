@@ -109,10 +109,6 @@ void Tools::ForwardRendererWidget::render() {
         m_renderer->set_sss_active(sssEnabled);
     if (sssEnabled)
     {
-        Vec3  scatterDist = m_renderer->get_sss_scattering_distance();
-        float scatter[3]  = {scatterDist.x, scatterDist.y, scatterDist.z};
-        if (ImGui::DragFloat3("Scatter Distance", scatter, 0.01f, 0.0f, 2.0f))
-            m_renderer->set_sss_scattering_distance({scatter[0], scatter[1], scatter[2]});
         float extinction = m_renderer->get_sss_extinction_coeff();
         if (ImGui::DragFloat("Extinction", &extinction, 0.01f, 0.0f, 10.0f))
             m_renderer->set_sss_extinction_coeff(extinction);

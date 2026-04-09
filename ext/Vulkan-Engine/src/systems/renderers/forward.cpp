@@ -6,6 +6,13 @@ namespace Systems {
 void ForwardRenderer::on_before_render(Core::Scene* const scene) {
     BaseRenderer::on_before_render(scene);
 
+    // Flush deferred scatter LUT load (queued before renderer was initialized)
+    if (!m_pendingScatterLut.empty()) {
+        if (m_passes[SSS_PASS])
+            static_cast<Core::SSSPass*>(m_passes[SSS_PASS])->load_scatter_lut(m_pendingScatterLut);
+        m_pendingScatterLut.clear();
+    }
+
     if (scene->get_skybox())
     {
         if (scene->get_skybox()->update_enviroment())

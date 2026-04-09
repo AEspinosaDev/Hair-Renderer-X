@@ -25,6 +25,7 @@ layout(set = 0, binding = 3) uniform sampler2D backIrrTex;    // back diffuse ir
 layout(set = 0, binding = 4) uniform sampler2D depthTex;      // R = gl_FragCoord.z
 layout(set = 0, binding = 5) uniform sampler2D aoThickTex;    // R = AO, G = thickness
 layout(set = 0, binding = 7) uniform sampler2D brightTex;     // Bright pass-through for Bloom
+layout(set = 0, binding = 8) uniform sampler2D scatterDistLUT; // 5-pixel LUT: thin→thick (sRGB)
 
 // --- Uniform block (std140, binding 6) --------------------------------------
 layout(set = 0, binding = 6) uniform SSSBlock {
@@ -36,11 +37,9 @@ layout(set = 0, binding = 6) uniform SSSBlock {
     float extinctionCoeff;  // Beer-Lambert extinction coefficient
     float Fdr;              // internal Fresnel diffuse reflectance
 
-    vec4  scatteringDistance; // rgb = per-channel scatter distance in world units
-
     vec2  screenSize;
 
-    layout(offset = 1072) mat4 projection;
+    layout(offset = 1056) mat4 projection;
     mat4 invProjection;
 } sss;
 
@@ -51,6 +50,22 @@ layout(location = 1) out vec4 outBright; // pass-through to Bloom
 // ----------------------------------------------------------------------------
 const float PI  = 3.14159265358979323846;
 const float EPS = 1e-6;
+
+// Sample one of the 5 LUT pixels (sRGB → linear)
+vec3 sampleProfile(int i) {
+    float u = (float(i) + 0.5) / 5.0;
+    return pow(texture(scatterDistLUT, vec2(u, 0.5)).rgb, vec3(2.2));
+}
+
+// Thickness-based blend across the 5 scatter distance profiles
+vec3 scatterDistanceBlend(float thickness) {
+    float t      = clamp(thickness, 0.0, 1.0);
+    float scaled = clamp(t * 4.0, 0.0, 4.0);
+    int   i0     = int(floor(scaled));
+    int   i1     = min(i0 + 1, 4);
+    float w      = scaled - float(i0);
+    return mix(sampleProfile(i0), sampleProfile(i1), w);
+}
 
 float random(vec2 st) 
 {
@@ -95,7 +110,8 @@ void main() {
         return;
     }
 
-    vec3 scatterDist = sss.scatteringDistance.rgb * sss.maxScatter;
+    vec3 blendedScatterDist = scatterDistanceBlend(thick);
+    vec3 scatterDist = blendedScatterDist * sss.maxScatter;
 	float maxRadius = max(scatterDist.r, max(scatterDist.g, scatterDist.b));
 
     // -------------------------------------------------------------------------
@@ -155,7 +171,7 @@ void main() {
     // Single scattering (translucency via Beer-Lambert)
     // -------------------------------------------------------------------------
     float transmittance = exp(-thick * sss.extinctionCoeff);
-    vec3  singleScatter = sss.Fdr * sss.scatteringDistance.rgb * transmittance * backIrr;
+    vec3  singleScatter = pow(blendedScatterDist, vec3(2.2)) * transmittance * backIrr;
 
     // -------------------------------------------------------------------------
     // Combine and output

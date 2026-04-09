@@ -113,18 +113,18 @@ void HairViewer::setup() {
 
     Mesh* human = new Mesh();
     // Tools::Loaders::load_3D_file(human , MESH_PATH + "head.ply", false);
-    Tools::Loaders::load_3D_file(human, MESH_PATH + "alex.ply", false);
+    Tools::Loaders::load_3D_file(human, MESH_PATH + "bust.obj", false);
 	// human ->set_scale(0.053f);
     human->set_scale(10.0f);
     // human ->set_rotation({90.0, 180.0f, -90.0f});
-    human->set_rotation({90.0, 180.0f, 0.0f});
+    human->set_rotation({0.0, 180.0f, 0.0f});
     auto humanMat        = new PhysicallyBasedMaterial();
     Texture* humanAlbedo = new Texture();
-    //Texture* humanNormal = new Texture();
-    Tools::Loaders::load_texture(humanAlbedo, TEXTURE_PATH + "alex.png");
-    //Tools::Loaders::load_texture(humanNormal, TEXTURE_PATH + "normal.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    Texture* humanNormal = new Texture();
+    Tools::Loaders::load_texture(humanAlbedo, TEXTURE_PATH + "albedo.png");
+    Tools::Loaders::load_texture(humanNormal, TEXTURE_PATH + "normal.png", TEXTURE_FORMAT_TYPE_NORMAL);
     humanMat->set_albedo_texture(humanAlbedo);
-    //humanMat->set_normal_texture(humanNormal);
+    humanMat->set_normal_texture(humanNormal);
     humanMat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
     humanMat->set_albedo_weight(0.75f);
     humanMat->set_metalness(0.0f);
@@ -164,6 +164,8 @@ void HairViewer::setup() {
     m_scene->enable_fog(false);
 
     m_controller = new Tools::Controller(camera, m_window, ControllerMovementType::ORBITAL);
+
+    static_cast<Systems::ForwardRenderer*>(m_renderer)->load_sss_scatter_lut(TEXTURE_PATH + "scatterDistance.png");
 }
 
 void HairViewer::update() {

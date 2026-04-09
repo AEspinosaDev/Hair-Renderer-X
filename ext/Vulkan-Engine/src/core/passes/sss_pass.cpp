@@ -1,5 +1,6 @@
 #include <engine/core/passes/sss_pass.h>
 #include <engine/core/resource_manager.h>
+#include <engine/tools/loaders.h>
 
 #include <cmath>
 #include <chrono>
@@ -109,21 +110,23 @@ void SSSPass::setup_attachments(std::vector<Graphics::AttachmentInfo>&    attach
 }
 
 void SSSPass::setup_uniforms(std::vector<Graphics::Frame>& frames) {
-    // 1 set, 1 UBO, 0 dynamic, 0 storage, 7 combined image samplers (bindings 0-5 + binding 7)
-    m_descriptorPool = m_device->create_descriptor_pool(1, 1, 0, 0, 7);
+    // 1 set, 1 UBO, 0 dynamic, 0 storage, 8 combined image samplers (bindings 0-5, 7, 8)
+    m_descriptorPool = m_device->create_descriptor_pool(1, 1, 0, 0, 8);
 
-    LayoutBinding hdrBinding    (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 0);
-    LayoutBinding albedoBinding (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 1);
-    LayoutBinding diffIrrBinding(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 2);
-    LayoutBinding backIrrBinding(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 3);
-    LayoutBinding depthBinding  (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 4);
-    LayoutBinding aoBinding     (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 5);
-    LayoutBinding uboBinding    (UNIFORM_BUFFER,                 SHADER_STAGE_FRAGMENT, 6);
-    LayoutBinding brightBinding (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 7);
+    LayoutBinding hdrBinding       (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 0);
+    LayoutBinding albedoBinding    (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 1);
+    LayoutBinding diffIrrBinding   (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 2);
+    LayoutBinding backIrrBinding   (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 3);
+    LayoutBinding depthBinding     (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 4);
+    LayoutBinding aoBinding        (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 5);
+    LayoutBinding uboBinding       (UNIFORM_BUFFER,                 SHADER_STAGE_FRAGMENT, 6);
+    LayoutBinding brightBinding    (UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 7);
+    LayoutBinding scatterLutBinding(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 8);
 
     m_descriptorPool.set_layout(
         GLOBAL_LAYOUT,
-        {hdrBinding, albedoBinding, diffIrrBinding, backIrrBinding, depthBinding, aoBinding, uboBinding, brightBinding});
+        {hdrBinding, albedoBinding, diffIrrBinding, backIrrBinding, depthBinding, aoBinding,
+         uboBinding, brightBinding, scatterLutBinding});
     m_descriptorPool.allocate_descriptor_set(GLOBAL_LAYOUT, &m_descriptorSet);
 
     m_ubo = m_device->create_buffer(sizeof(SSSUniforms),
@@ -134,14 +137,17 @@ void SSSPass::setup_uniforms(std::vector<Graphics::Frame>& frames) {
     SSSUniforms data{};
     for (uint32_t i = 0; i < MAX_SAMPLES; i++)
         data.samples[i] = m_samples[i];
-    data.sampleCount        = m_sampleCount;
-    data.maxScatter         = m_maxScatter;
-    data.extinctionCoeff    = m_extinctionCoeff;
-    data.Fdr                = m_Fdr;
-    data.scatteringDistance = Vec4(m_scatteringDistance, 0.0f);
+    data.sampleCount     = m_sampleCount;
+    data.maxScatter      = m_maxScatter;
+    data.extinctionCoeff = m_extinctionCoeff;
+    data.Fdr             = m_Fdr;
     m_ubo.upload_data(&data, sizeof(SSSUniforms));
 
     m_descriptorPool.set_descriptor_write(&m_ubo, sizeof(SSSUniforms), 0, &m_descriptorSet, UNIFORM_BUFFER, 6);
+
+    // Binding 8: use fallback texture until load_scatter_lut() is called from the app
+    m_descriptorPool.set_descriptor_write(
+        get_image(ResourceManager::FALLBACK_TEXTURE), LAYOUT_SHADER_READ_ONLY_OPTIMAL, &m_descriptorSet, 8);
 }
 
 void SSSPass::setup_shader_passes() {
@@ -174,12 +180,11 @@ void SSSPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32_t
     for (uint32_t i = 0; i < MAX_SAMPLES; i++)
         data.samples[i] = m_samples[i];
     // sampleCount == 0 signals passthrough to the shader when SSS is disabled
-    data.sampleCount        = (m_sssEnabled != 0) ? m_sampleCount : 0;
-    data.maxScatter         = m_maxScatter;
-    data.extinctionCoeff    = m_extinctionCoeff;
-    data.Fdr                = m_Fdr;
-    data.scatteringDistance = Vec4(m_scatteringDistance, 0.0f);
-    data.screenSize         = Vec2(static_cast<float>(m_imageExtent.width),
+    data.sampleCount     = (m_sssEnabled != 0) ? m_sampleCount : 0;
+    data.maxScatter      = m_maxScatter;
+    data.extinctionCoeff = m_extinctionCoeff;
+    data.Fdr             = m_Fdr;
+    data.screenSize      = Vec2(static_cast<float>(m_imageExtent.width),
                                    static_cast<float>(m_imageExtent.height));
     data.projection    = cam->get_projection();
     data.invProjection = glm::inverse(cam->get_projection());
@@ -197,6 +202,24 @@ void SSSPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32_t
     cmd.draw_geometry(*get_VAO(g));
 
     cmd.end_renderpass(m_renderpass, m_framebuffers[0]);
+}
+
+void SSSPass::load_scatter_lut(const std::string& path) {
+    if (m_scatterDistLUT)
+        ResourceManager::destroy_texture_data(m_scatterDistLUT);
+
+    TextureSettings settings{};
+    settings.useMipmaps = false;
+    settings.adressMode = ADDRESS_MODE_CLAMP_TO_EDGE;
+    settings.filter     = FILTER_LINEAR;
+    settings.format     = RGBA_8U;
+
+    m_scatterDistLUT = new Core::Texture(settings);
+    Tools::Loaders::load_texture(m_scatterDistLUT, path, TEXTURE_FORMAT_TYPE_NORMAL, false); // sync, UNORM so shader can linearize manually
+    ResourceManager::upload_texture_data(m_device, m_scatterDistLUT);
+
+    m_descriptorPool.set_descriptor_write(
+        get_image(m_scatterDistLUT), LAYOUT_SHADER_READ_ONLY_OPTIMAL, &m_descriptorSet, 8);
 }
 
 void SSSPass::link_previous_images(std::vector<Graphics::Image> images) {
@@ -226,6 +249,8 @@ void SSSPass::link_previous_images(std::vector<Graphics::Image> images) {
 }
 
 void SSSPass::cleanup() {
+    if (m_scatterDistLUT)
+        ResourceManager::destroy_texture_data(m_scatterDistLUT);
     m_ubo.cleanup();
     BasePass::cleanup();
 }

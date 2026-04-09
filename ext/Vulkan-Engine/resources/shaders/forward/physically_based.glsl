@@ -152,6 +152,11 @@ layout(set = 2, binding = 5) uniform sampler2D emissiveTex;
 //BRDF Definiiton
 SchlickSmithBRDF brdf;
 
+const float distortion = 0.2;
+const float backRadiancePower = 5.0;
+const float backRadianceScale = 2.0;
+const float ambient = 0.05;
+
 
 void setupBRDFProperties(){
   //Setting input surface properties
@@ -201,7 +206,7 @@ void main() {
     vec3 diffuseIrr = vec3(0.0);
     vec3 backIrr = vec3(0.0);
     for(int i = 0; i < scene.numLights; i++) {
-        //If inside liught area influence
+        //If inside light area influence
         if(isInAreaOfInfluence(scene.lights[i], v_pos)){
 
             vec3 wi = scene.lights[i].type != DIRECTIONAL_LIGHT ? normalize(scene.lights[i].position - v_pos) : normalize(scene.lights[i].position.xyz);
@@ -229,7 +234,12 @@ void main() {
 
             color += lighting;
             diffuseIrr += max(dot(brdf.normal, wi), 0.0) * radiance * shadowFactor;
-            backIrr    += max(dot(-brdf.normal, wi), 0.0) * radiance;
+
+            vec3 HBack = wi + brdf.normal * distortion;
+            float VDotH = pow(clamp(dot(normalize(-v_pos), -HBack), EPSILON, 1.0), backRadiancePower) * backRadianceScale;
+            float attenuation = clamp(dot(brdf.normal, wi) + dot(normalize(-v_pos), -wi), EPSILON, 1.0);
+            // radiance = scene.lights[i].color * attenuation * scene.lights[i].intensity;
+            backIrr    += radiance * (VDotH + ambient);
         }
     }
 
