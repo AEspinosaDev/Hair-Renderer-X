@@ -67,9 +67,9 @@ vec3 scatterDistanceBlend(float thickness) {
     return mix(sampleProfile(i0), sampleProfile(i1), w);
 }
 
-float random(vec2 st) 
-{
-  return fract(sin(dot(st, vec2(12.9898, 78.233))) * 43758.5453123);
+// High-quality Interleaved Gradient Noise
+float interleavedGradientNoise(vec2 pix) {
+    return fract(52.9829189 * fract(dot(pix, vec2(0.06711056, 0.00583715))));
 }
 
 vec3 Rr(vec3 d, float r) // Burley's Normalized Diffusion Model
@@ -123,14 +123,14 @@ void main() {
     // We replace the local diffuse term with the scattered diffuse integral
     // and keep everything else (specular, ambient) unchanged.
     // -------------------------------------------------------------------------
-    vec3 nonDiffuse = max(hdr.rgb - albedo * diffIrr, vec3(0.0)); // specular + ambient (HDR, no upper clamp)
+    vec3 nonDiffuse = max(hdr.rgb - albedo * diffIrr, vec3(0.0)); // specular + ambient
 
 	// View fragment position computation (perspectiveRH_ZO: depth already in [0,1])
   	vec2 fragCoords = v_uv * 2.0 - vec2(1.0);
   	vec4 viewSpacePos = sss.invProjection * vec4(fragCoords, depth, 1.0);
   	vec3 fragViewPos = viewSpacePos.xyz / viewSpacePos.w;
 
-	float jitter = 2.0 * PI * random(mod(v_uv * sss.screenSize, float(sss.sampleCount)));
+    float jitter = 2.0 * PI * interleavedGradientNoise(gl_FragCoord.xy);
 
     vec3 scatteredIrr = vec3(0.0);
     vec3 totalWeight  = vec3(0.0);
@@ -177,6 +177,5 @@ void main() {
     // Combine and output
     // -------------------------------------------------------------------------
     outColor  = vec4(nonDiffuse + scatteredIrr + singleScatter, hdr.a);
-    //outColor = vec4(thick, 0.0, 0.0, 1.0);
     outBright = texture(brightTex, v_uv);
 }
