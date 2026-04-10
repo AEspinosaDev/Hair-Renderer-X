@@ -27,7 +27,7 @@ struct RendererSettings {
     MSAASamples     samplesMSAA      = MSAASamples::x4;
     BufferingType   bufferingType    = BufferingType::DOUBLE;
     SyncType        screenSync       = SyncType::MAILBOX;
-    ColorFormatType colorFormat      = SRGBA_8;
+    ColorFormatType colorFormat      = SBGRA_8;
     ColorFormatType depthFormat      = DEPTH_32F;
     Vec4            clearColor       = Vec4{0.0, 0.0, 0.0, 1.0};
     bool            softwareAA       = false;
