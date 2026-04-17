@@ -1,3 +1,12 @@
+#include <stb_image.h>                  // declarations — implementation lives in the engine's stb_image library
+
+#define TINYGLTF_IMPLEMENTATION
+#define TINYGLTF_NO_INCLUDE_STB_IMAGE       // already included above
+#define TINYGLTF_NO_STB_IMAGE_WRITE         // we don't write images
+#define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
+#include <tiny_gltf.h>
+
+#include <glm/gtc/type_ptr.hpp>
 #include <engine/tools/loaders.h>
 
 void VKFW::Tools::Loaders::load_OBJ(Core::Mesh* const mesh, const std::string fileName, bool importMaterials, bool calculateTangents, bool overrideGeometry) {
@@ -346,6 +355,274 @@ void VKFW::Tools::Loaders::load_PLY(Core::Mesh* const mesh,
     } catch (const std::exception& e)
     { std::cerr << "Caught tinyply exception: " << e.what() << std::endl; }
 }
+void VKFW::Tools::Loaders::load_GLB(Core::Mesh* const mesh, const std::string fileName, int meshIndex,
+                                     std::vector<Core::Texture*>* outTextures) {
+    tinygltf::Model    model;
+    tinygltf::TinyGLTF loader;
+    std::string        err;
+    std::string        warn;
+
+    bool ok = loader.LoadBinaryFromFile(&model, &err, &warn, fileName);
+    if (!warn.empty())
+        LOG_DEBUG("GLB warn [" + fileName + "]: " + warn);
+    if (!err.empty())
+        LOG_ERROR("GLB error [" + fileName + "]: " + err);
+    if (!ok)
+    {
+        LOG_ERROR("Failed to parse GLB: " + fileName);
+        return;
+    }
+
+    int meshCount = static_cast<int>(model.meshes.size());
+    int firstMesh = (meshIndex < 0) ? 0 : meshIndex;
+    int lastMesh  = (meshIndex < 0) ? meshCount - 1 : meshIndex;
+
+    if (firstMesh < 0 || firstMesh >= meshCount || lastMesh >= meshCount)
+    {
+        LOG_ERROR("GLB mesh index out of range for: " + fileName);
+        return;
+    }
+
+    // --- helpers ---
+    // Returns a pointer to the first byte of an accessor's data in its buffer.
+    auto acc_raw = [&](int acc_idx) -> const uint8_t* {
+        const auto& acc = model.accessors[acc_idx];
+        const auto& bv  = model.bufferViews[acc.bufferView];
+        return model.buffers[bv.buffer].data.data() + bv.byteOffset + acc.byteOffset;
+    };
+    auto acc_count = [&](int acc_idx) -> size_t { return model.accessors[acc_idx].count; };
+
+    // --- process each selected glTF mesh ---
+    for (int mi = firstMesh; mi <= lastMesh; ++mi)
+    {
+        const tinygltf::Mesh& gltfMesh = model.meshes[mi];
+
+        for (const tinygltf::Primitive& prim : gltfMesh.primitives)
+        {
+            if (prim.mode != TINYGLTF_MODE_TRIANGLES)
+                continue;
+
+            // ---- POSITION (required) ----
+            auto posIt = prim.attributes.find("POSITION");
+            if (posIt == prim.attributes.end())
+                continue;
+
+            size_t       vertCount = acc_count(posIt->second);
+            const float* posPtr    = reinterpret_cast<const float*>(acc_raw(posIt->second));
+
+            // ---- NORMAL (optional — computed if absent) ----
+            const float* nrmPtr = nullptr;
+            auto         nrmIt  = prim.attributes.find("NORMAL");
+            if (nrmIt != prim.attributes.end())
+                nrmPtr = reinterpret_cast<const float*>(acc_raw(nrmIt->second));
+
+            // ---- TEXCOORD_0 (optional) ----
+            const float* uvPtr = nullptr;
+            auto         uvIt  = prim.attributes.find("TEXCOORD_0");
+            if (uvIt != prim.attributes.end())
+                uvPtr = reinterpret_cast<const float*>(acc_raw(uvIt->second));
+
+            // ---- COLOR_0 (optional) ----
+            const float* colPtr = nullptr;
+            auto         colIt  = prim.attributes.find("COLOR_0");
+            if (colIt != prim.attributes.end())
+                colPtr = reinterpret_cast<const float*>(acc_raw(colIt->second));
+
+            // ---- build vertex array ----
+            std::vector<Graphics::Vertex> vertices(vertCount);
+            for (size_t i = 0; i < vertCount; ++i)
+            {
+                vertices[i].pos      = {posPtr[3 * i], posPtr[3 * i + 1], posPtr[3 * i + 2]};
+                vertices[i].normal   = nrmPtr ? Vec3(nrmPtr[3 * i], nrmPtr[3 * i + 1], nrmPtr[3 * i + 2]) : Vec3(0.0f);
+                vertices[i].texCoord = uvPtr ? Vec2(uvPtr[2 * i], 1.0f - uvPtr[2 * i + 1]) : Vec2(0.0f);
+                vertices[i].color    = colPtr ? Vec3(colPtr[3 * i], colPtr[3 * i + 1], colPtr[3 * i + 2]) : Vec3(1.0f);
+                vertices[i].tangent  = Vec3(0.0f);
+            }
+
+            // ---- INDICES ----
+            std::vector<uint32_t> indices;
+            if (prim.indices >= 0)
+            {
+                const auto&    acc      = model.accessors[prim.indices];
+                const uint8_t* idxPtr   = acc_raw(prim.indices);
+                indices.resize(acc.count);
+
+                if (acc.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
+                {
+                    const uint16_t* p = reinterpret_cast<const uint16_t*>(idxPtr);
+                    for (size_t i = 0; i < acc.count; ++i)
+                        indices[i] = p[i];
+                }
+                else if (acc.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
+                {
+                    const uint32_t* p = reinterpret_cast<const uint32_t*>(idxPtr);
+                    for (size_t i = 0; i < acc.count; ++i)
+                        indices[i] = p[i];
+                }
+                else if (acc.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE)
+                {
+                    for (size_t i = 0; i < acc.count; ++i)
+                        indices[i] = idxPtr[i];
+                }
+            }
+
+            // ---- compute normals from topology if not supplied ----
+            if (!nrmPtr && !indices.empty())
+            {
+                for (size_t i = 0; i + 2 < indices.size(); i += 3)
+                {
+                    auto& v0 = vertices[indices[i]];
+                    auto& v1 = vertices[indices[i + 1]];
+                    auto& v2 = vertices[indices[i + 2]];
+                    Vec3  n  = glm::cross(v1.pos - v0.pos, v2.pos - v0.pos);
+                    v0.normal += n;
+                    v1.normal += n;
+                    v2.normal += n;
+                }
+                for (auto& v : vertices)
+                {
+                    float len = glm::length(v.normal);
+                    if (len > 1e-6f)
+                        v.normal /= len;
+                }
+            }
+
+            // ---- tangents via Gram-Schmidt (always) ----
+            compute_tangents_gram_smidt(vertices, indices);
+
+            // ---- SKIN DATA (JOINTS_0 + WEIGHTS_0) ----
+            std::optional<Core::SkinData> skinData;
+            auto                          jointsIt  = prim.attributes.find("JOINTS_0");
+            auto                          weightsIt = prim.attributes.find("WEIGHTS_0");
+            if (jointsIt != prim.attributes.end() && weightsIt != prim.attributes.end())
+            {
+                Core::SkinData sd;
+                sd.jointIndices.resize(vertCount);
+                sd.jointWeights.resize(vertCount);
+
+                // Joint indices — may be UNSIGNED_SHORT or UNSIGNED_BYTE
+                const auto&    jAcc = model.accessors[jointsIt->second];
+                const uint8_t* jPtr = acc_raw(jointsIt->second);
+                for (size_t i = 0; i < vertCount; ++i)
+                {
+                    if (jAcc.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
+                    {
+                        const uint16_t* p = reinterpret_cast<const uint16_t*>(jPtr) + 4 * i;
+                        sd.jointIndices[i] = {p[0], p[1], p[2], p[3]};
+                    }
+                    else // UNSIGNED_BYTE
+                    {
+                        const uint8_t* p = jPtr + 4 * i;
+                        sd.jointIndices[i] = {p[0], p[1], p[2], p[3]};
+                    }
+                }
+
+                // Joint weights — float VEC4
+                const float* wPtr = reinterpret_cast<const float*>(acc_raw(weightsIt->second));
+                for (size_t i = 0; i < vertCount; ++i)
+                    sd.jointWeights[i] = {wPtr[4 * i], wPtr[4 * i + 1], wPtr[4 * i + 2], wPtr[4 * i + 3]};
+
+                // Inverse bind matrices + joint names from the first skin
+                if (!model.skins.empty())
+                {
+                    const tinygltf::Skin& skin = model.skins[0];
+                    for (int ji : skin.joints)
+                        sd.jointNames.push_back(ji < (int)model.nodes.size() ? model.nodes[ji].name : "");
+
+                    if (skin.inverseBindMatrices >= 0)
+                    {
+                        size_t       jointCount = acc_count(skin.inverseBindMatrices);
+                        const float* ibmPtr     = reinterpret_cast<const float*>(acc_raw(skin.inverseBindMatrices));
+                        sd.inverseBindMatrices.resize(jointCount);
+                        for (size_t j = 0; j < jointCount; ++j)
+                            sd.inverseBindMatrices[j] = glm::make_mat4(ibmPtr + 16 * j);
+                    }
+                }
+
+                skinData = std::move(sd);
+            }
+
+            // ---- MORPH TARGETS ----
+            std::optional<Core::MorphTargetData> morphData;
+            if (!prim.targets.empty())
+            {
+                Core::MorphTargetData md;
+
+                // Target names come from mesh.extras["targetNames"]
+                std::vector<std::string> names;
+                if (gltfMesh.extras.IsObject() && gltfMesh.extras.Has("targetNames"))
+                {
+                    const auto& arr = gltfMesh.extras.Get("targetNames");
+                    if (arr.IsArray())
+                        for (int ti = 0; ti < (int)arr.ArrayLen(); ++ti)
+                            names.push_back(arr.Get(ti).Get<std::string>());
+                }
+
+                for (size_t ti = 0; ti < prim.targets.size(); ++ti)
+                {
+                    Core::MorphTargetData::Target target;
+                    auto                          dpIt = prim.targets[ti].find("POSITION");
+                    if (dpIt != prim.targets[ti].end())
+                    {
+                        const float* dpPtr   = reinterpret_cast<const float*>(acc_raw(dpIt->second));
+                        size_t       dpCount = acc_count(dpIt->second);
+                        target.deltaPos.resize(dpCount);
+                        for (size_t i = 0; i < dpCount; ++i)
+                            target.deltaPos[i] = {dpPtr[3 * i], dpPtr[3 * i + 1], dpPtr[3 * i + 2]};
+                    }
+                    md.targets.push_back(std::move(target));
+                    md.targetNames.push_back(ti < names.size() ? names[ti] : ("morph_" + std::to_string(ti)));
+                }
+
+                morphData = std::move(md);
+            }
+
+            // ---- build and push Geometry ----
+            Core::Geometry* g = new Core::Geometry();
+            g->fill(vertices, indices);
+            if (skinData)
+                g->set_skin_data(std::move(*skinData));
+            if (morphData)
+                g->set_morph_target_data(std::move(*morphData));
+
+            mesh->push_geometry(g);
+
+            // ---- extract embedded albedo texture if requested ----
+            if (outTextures && prim.material >= 0)
+            {
+                const tinygltf::Material& mat = model.materials[prim.material];
+                int texIdx = mat.pbrMetallicRoughness.baseColorTexture.index;
+                if (texIdx >= 0)
+                {
+                    int imgIdx = model.textures[texIdx].source;
+                    if (imgIdx >= 0)
+                    {
+                        const tinygltf::Image& img = model.images[imgIdx];
+                        // img.image is RGBA decoded by tinygltf; copy into malloc'd buffer
+                        // (same ownership convention as stbi_load — resource manager will consume it)
+                        size_t         byteCount = img.width * img.height * 4;
+                        unsigned char* pixels    = static_cast<unsigned char*>(malloc(byteCount));
+                        if (img.image.size() >= byteCount)
+                            memcpy(pixels, img.image.data(), byteCount);
+                        else
+                            memset(pixels, 255, byteCount); // fallback white
+
+                        Core::Texture* tex = new Core::Texture();
+                        tex->set_image_cache(
+                            pixels,
+                            {static_cast<unsigned int>(img.width), static_cast<unsigned int>(img.height), 1},
+                            4);
+                        tex->set_format(SRGBA_8);
+                        outTextures->push_back(tex);
+                    }
+                }
+            }
+        }
+    }
+
+    mesh->set_file_route(fileName);
+}
+
 void VKFW::Tools::Loaders::load_3D_file(Core::Mesh* const mesh, const std::string fileName, bool asynCall, bool overrideGeometry) {
     size_t dotPosition = fileName.find_last_of(".");
 
@@ -384,6 +661,17 @@ void VKFW::Tools::Loaders::load_3D_file(Core::Mesh* const mesh, const std::strin
                 loadThread.detach();
             } else
                 Loaders::load_hair(mesh, fileName.c_str());
+
+            return;
+        }
+        if (fileExtension == GLB || fileExtension == GLTF)
+        {
+            if (asynCall)
+            {
+                std::thread loadThread(Loaders::load_GLB, mesh, fileName, -1, nullptr);
+                loadThread.detach();
+            } else
+                Loaders::load_GLB(mesh, fileName, -1, nullptr);
 
             return;
         }

@@ -84,6 +84,8 @@
 #define PLY "ply"
 #define OBJ "obj"
 #define FBX "fbx"
+#define GLB "glb"
+#define GLTF "gltf"
 #define PNG "png"
 #define HDR "hdr"
 #define JPG "jpg"

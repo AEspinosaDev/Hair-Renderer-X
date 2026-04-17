@@ -20,6 +20,26 @@ namespace Core {
 
 class Geometry;
 
+// Per-vertex skinning data (4 joints per vertex). Stored separately from the
+// Vertex struct so all existing VAO/pipeline code is untouched. Uploaded as
+// SSBOs when skeletal animation is implemented.
+struct SkinData {
+    std::vector<glm::uvec4> jointIndices;       // 4 joint indices per vertex
+    std::vector<Vec4>       jointWeights;       // 4 normalized weights per vertex
+    std::vector<Mat4>       inverseBindMatrices; // one per joint
+    std::vector<std::string> jointNames;        // for debugging
+};
+
+// Per-mesh morph target data. Stores only POSITION deltas (as exported from
+// glTF). Normal deltas can be added if the source ever provides them.
+struct MorphTargetData {
+    struct Target {
+        std::vector<Vec3> deltaPos;
+    };
+    std::vector<Target>      targets;
+    std::vector<std::string> targetNames;
+};
+
 struct GeometricData {
     std::vector<uint32_t>         vertexIndex;
     std::vector<Graphics::Vertex> vertexData;
@@ -33,6 +53,10 @@ struct GeometricData {
     float avgFiberLength = 0.0f; // If fiber;
 
     bool loaded{false};
+
+    // Optional skinning and morph-target data (present only for GLB meshes)
+    std::optional<SkinData>       skinData;
+    std::optional<MorphTargetData> morphTargetData;
 
     void compute_statistics();
 };
@@ -77,6 +101,13 @@ class Geometry
     inline void set_avg_fiber_length(float length) {
         m_properties.avgFiberLength = length;
     };
+
+    inline void set_skin_data(SkinData sd) {
+        m_properties.skinData = std::move(sd);
+    }
+    inline void set_morph_target_data(MorphTargetData md) {
+        m_properties.morphTargetData = std::move(md);
+    }
     /*
     Use Voxel Acceleration Structure
     */

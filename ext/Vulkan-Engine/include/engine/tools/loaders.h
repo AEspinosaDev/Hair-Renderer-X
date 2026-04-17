@@ -37,6 +37,18 @@ void load_PLY(Core::Mesh* const mesh,
               bool              calculateTangents = false,
               bool              overrideGeometry  = false);
 /*
+Load a GLB (glTF Binary) file. Extracts geometry, normals, UVs, skinning data,
+and morph targets. meshIndex == -1 loads all meshes as separate Geometry entries
+on the same Mesh object; otherwise only the mesh at that index is loaded.
+If outTextures is non-null, embedded albedo textures referenced by loaded
+primitives are decoded and appended (one per primitive that has a baseColorTexture).
+*/
+void load_GLB(Core::Mesh* const                    mesh,
+              const std::string                     fileName,
+              int                                   meshIndex   = -1,
+              std::vector<Core::Texture*>*           outTextures = nullptr);
+
+/*
 Generic loader. It automatically parses the file and find the needed loader for the file extension. Can be called
 asynchronously
 */

@@ -107,3 +107,64 @@ Hair shaders write `scatterMask = 0.0` to attachment 3 alpha. The SSS pass skips
 - Missing `#include <chrono>`
 
 ---
+
+## GLB Loading Support (Standalone Task)
+
+### Goal
+
+Add GLB (glTF Binary) file loading to the engine using tinygltf. This enables loading skeletal meshes with morph targets (blendshapes) from the 4 test characters in `resources/models/`. The loader extracts all geometry data and stores skeletal/morph metadata for future animation work. Mesh selection is by index, so the caller decides which mesh(es) from the GLB to load.
+
+### Architecture Decision: Skinning Data Storage
+
+**Option C — Separate parallel data (chosen).** Joint indices and weights are stored alongside `GeometricData` as parallel vectors, not added to the `Vertex` struct. Reasons:
+
+- The `Vertex` struct is the foundation of **every** VAO binding, pipeline, and shader in the engine. Adding 32 bytes (uvec4 + vec4) to it would force changes to every vertex input layout, break the hash function, waste memory on non-skinned meshes, and risk Vulkan validation errors across all passes.
+- Skinning data is consumed by a compute/vertex shader at animation time via SSBO — it doesn't need to flow through the rasterization vertex attributes.
+- Morph target deltas are also stored as parallel data (SSBO-ready), same pattern.
+- This is the minimal-change approach: existing Vertex, VAO, and pipeline code is untouched.
+
+### Data Model
+
+```
+GeometricData (existing)          SkinData (new, per-Geometry)
+├─ vertexData: Vertex[]           ├─ jointIndices: uvec4[]      (per-vertex, 4 joints)
+├─ vertexIndex: uint32_t[]        ├─ jointWeights: vec4[]       (per-vertex, 4 weights)
+├─ voxelData: Voxel[]             ├─ inverseBindMatrices: mat4[] (per-joint)
+├─ maxCoords, minCoords, center   └─ jointNames: string[]       (for debugging)
+└─ loaded: bool
+                                  MorphTargetData (new, per-Geometry)
+                                  ├─ targets[]: { deltaPos: vec3[], deltaNormal: vec3[] }
+                                  └─ targetNames: string[]
+```
+
+`SkinData` and `MorphTargetData` live on `GeometricData` as `std::optional` fields — present only when the source file contains them.
+
+### GLB Test File Summary
+
+| File | Meshes | Joints | Morphs (mesh 0) | Textures | Main mesh attrs | Secondary mesh attrs |
+|------|--------|--------|------------------|----------|-----------------|----------------------|
+| maria.glb | 4 | 55 | 100 | 1 | POS, NORMAL, UV, JOINTS, WEIGHTS | POS, JOINTS, WEIGHTS |
+| javi.glb | 6 | 55 | 100 | 1 | POS, NORMAL, UV, JOINTS, WEIGHTS | POS, JOINTS, WEIGHTS |
+| alex.glb | 4 | 55 | 100 | 1 | POS, NORMAL, UV, JOINTS, WEIGHTS | POS, JOINTS, WEIGHTS |
+| nadia.glb | 4 | 55 | 100 | 1 | POS, NORMAL, UV, JOINTS, WEIGHTS | POS, JOINTS, WEIGHTS |
+
+Main mesh (mesh 0) has normals and UVs. Secondary meshes (teeth, tongue, hearing aid) have only positions — normals must be computed from triangle topology. No tangents in any mesh — must be computed via Gram-Schmidt. Morph targets contain only POSITION deltas. 55-joint skeleton. 1 embedded texture per file.
+
+### Tasks
+
+| # | Task | Status | Description |
+|---|------|--------|-------------|
+| 1 | Add tinygltf to thirdparty | [x] | tinygltf v2.9.3 + nlohmann/json v3.11.3 under `thirdparty/tinygltf/include/`. INTERFACE CMake target, linked into VulkanEngine. |
+| 2 | Extend GeometricData | [x] | Added `SkinData` (jointIndices uvec4[], jointWeights vec4[], inverseBindMatrices mat4[], jointNames) and `MorphTargetData` (targets[]{deltaPos vec3[]}, targetNames) as `std::optional` fields on `GeometricData`. Added `set_skin_data()` / `set_morph_target_data()` setters to `Geometry`. |
+| 3 | Implement `load_GLB()` | [x] | Implemented in `loaders.cpp`. Extracts pos/normal/UV/color, computes normals from topology when absent, always computes tangents via Gram-Schmidt, reads JOINTS_0/WEIGHTS_0 for skinning, reads inverse bind matrices from skin[0], reads morph target POSITION deltas with names from `extras.targetNames`. |
+| 4 | Wire GLB into `load_3D_file()` | [x] | Added `GLB`/`GLTF` defines to `common.h`. Added dispatch branch (sync and async) in `load_3D_file()`. |
+| 5 | Add `USE_GLB_MODELS` path in application | [x] | Added `#define USE_GLB_MODELS` block in `application.cpp` loading `maria.glb` mesh 0 with PBR material. Uses `#ifdef`/`#elif`/`#else`/`#endif` chain with `USE_NEURAL_MODELS` and default. |
+| 6 | Build and validate | [x] | Clean build (GCC, -O3). 10-frame headless run: zero Vulkan validation errors or warnings from new code. Pre-existing warnings unchanged. |
+
+**Implementation notes**:
+- `TINYGLTF_NO_STB_IMAGE` + `TINYGLTF_NO_STB_IMAGE_WRITE` defined before tinygltf include — geometry-only loader, no image decoding needed.
+- `TINYGLTF_IMPLEMENTATION` defined at top of `loaders.cpp` (single translation unit), header only exposes the function declaration.
+- `glm/gtc/type_ptr.hpp` included for `glm::make_mat4` used to parse column-major GLB matrices.
+- `tinygltf::Value::IsObject()` used for extras check (this version has no `IsNull()`).
+
+---

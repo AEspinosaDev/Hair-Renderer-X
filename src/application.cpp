@@ -2,6 +2,7 @@
 #include <filesystem>
 
 // #define USE_NEURAL_MODELS
+#define USE_GLB_MODELS
 
 void HairViewer::init(Systems::RendererSettings settings) {
     m_window = new WindowGLFW("Hair Viewer", 1024, 1024);
@@ -70,7 +71,22 @@ void HairViewer::setup() {
 
     m_scene->add(light);
 
-#ifdef USE_NEURAL_MODELS
+#ifdef USE_GLB_MODELS
+    Mesh* character = new Mesh();
+    std::vector<Texture*> glbTextures;
+    Tools::Loaders::load_GLB(character, MESH_PATH + "maria.glb", 0, &glbTextures);
+    character->set_scale(10.0f);
+    character->set_rotation({0.0f, 180.0f, 0.0f});
+    auto charMat = new PhysicallyBasedMaterial();
+    if (!glbTextures.empty())
+        charMat->set_albedo_texture(glbTextures[0]);
+    charMat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
+    charMat->set_metalness(0.0f);
+    charMat->set_roughness(0.5f);
+    character->push_material(charMat);
+    character->set_name("Maria");
+    m_scene->add(character);
+#elif defined(USE_NEURAL_MODELS)
     // load_neural_avatar(
     //     RESOURCES_PATH "models/neural_hair_PABLO.ply", RESOURCES_PATH "models/neural_head_PABLO.ply", "Pablo", {0.32, 0.12, 1.0}, Vec3(0.0), -175.0f);
     // load_neural_avatar(RESOURCES_PATH "models/neural_hair_TONY.ply",
