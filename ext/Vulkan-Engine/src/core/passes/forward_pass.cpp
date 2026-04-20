@@ -331,6 +331,16 @@ void ForwardPass::setup_shader_passes() {
     m_shaderPasses[IMaterial::Type::HAIR_STR_EPIC_TYPE] = hairStrandPass2;
 
 #endif
+    GraphicShaderPass* hairCardPass =
+        new GraphicShaderPass(m_device->get_handle(), m_renderpass, m_imageExtent, ENGINE_RESOURCES_PATH "shaders/forward/hair_card.glsl");
+    hairCardPass->settings.descriptorSetLayoutIDs = {{GLOBAL_LAYOUT, true}, {OBJECT_LAYOUT, true}, {OBJECT_TEXTURE_LAYOUT, true}};
+    hairCardPass->graphicSettings.attributes      = {
+        {POSITION_ATTRIBUTE, true}, {NORMAL_ATTRIBUTE, true}, {UV_ATTRIBUTE, true}, {TANGENT_ATTRIBUTE, true}, {COLOR_ATTRIBUTE, false}};
+    hairCardPass->graphicSettings.blendAttachments = blendAttachments;
+    hairCardPass->graphicSettings.dynamicStates    = dynamicStates;
+    hairCardPass->graphicSettings.samples          = samples;
+    m_shaderPasses[IMaterial::Type::HAIR_CARD_TYPE] = hairCardPass;
+
     GraphicShaderPass* hairStrandPassDisney =
         new GraphicShaderPass(m_device->get_handle(), m_renderpass, m_imageExtent, ENGINE_RESOURCES_PATH "shaders/forward/hair_strand_disney.glsl");
     hairStrandPassDisney->settings.descriptorSetLayoutIDs = {{GLOBAL_LAYOUT, true}, {OBJECT_LAYOUT, true}, {OBJECT_TEXTURE_LAYOUT, true}};

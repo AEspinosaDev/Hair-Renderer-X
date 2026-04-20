@@ -168,3 +168,278 @@ Main mesh (mesh 0) has normals and UVs. Secondary meshes (teeth, tongue, hearing
 - `tinygltf::Value::IsObject()` used for extras check (this version has no `IsNull()`).
 
 ---
+
+## Hair Card Rendering
+
+### Context
+
+The project currently renders hair as strand geometry (line segments expanded via geometry shaders). We need to add support for **hair cards** — textured triangle meshes that approximate hair volume using alpha-tested quads. The OBJ mesh (`resources/models/hair_fauxmohawk.obj`, ~21K vertices with UVs and normals) and texture (`resources/textures/hair_fauxmohawk.PNG`) come from Unreal MetaHumans.
+
+The texture is a **packed data texture** (not albedo — the visible colors are false-color channel encoding):
+- **R**: Alpha/opacity mask (confirmed by user)
+- **G**: Root-to-tip gradient (for color variation along the strand)
+- **B**: Per-strand random ID (for subtle per-strand hue/brightness variation)
+
+Hair color will come from uniform values (rootColor, tipColor). The hair cards will be added alongside existing strand hair in the scene. There is also a `hair_fauxmohawk_rootscoverage.PNG` texture (density/flow data) that is not used in the initial implementation.
+
+`HAIR_CARD_TYPE = 4` is already reserved in the `IMaterial::Type` enum (`material.h:47`) but has no implementation.
+
+### Task 1: Create `HairCardMaterial` class
+
+**Create** `ext/Vulkan-Engine/include/engine/core/materials/hair_card.h`
+
+Follow the pattern established by `PhysicallyBasedMaterial` (`physically_based.h`):
+- Class `HairCardMaterial` inherits `IMaterial` with type `HAIR_CARD_TYPE`
+- Constructor sets default `MaterialSettings`: `alphaTest = true`, `faceCulling = false` (double-sided cards), `depthTest = true`, `depthWrite = true`
+- Member variables with getters/setters (each setter sets `m_isDirty = true`):
+  - `m_hairColor` (Vec3, default dark brown `{0.05, 0.02, 0.01}`) — fallback color when no root/tip distinction
+  - `m_rootColor` (Vec3, default same as hairColor) — color at the root of strands
+  - `m_tipColor` (Vec3, default same as hairColor) — color at the tip of strands
+  - `m_roughness` (float, default 0.4) — surface roughness for lighting
+  - `m_specularIntensity` (float, default 0.5) — Kajiya-Kay specular strength multiplier
+  - `m_specularShift` (float, default 0.1 radians) — tangent shift for the primary Kajiya-Kay highlight
+  - `m_alphaThreshold` (float, default 0.1) — discard threshold applied to R channel of packed texture
+  - `m_colorVariation` (float, default 0.1) — how much the B channel (strand ID) varies the final color
+- Texture enum and storage (same pattern as PBR's `m_textures` unordered_map):
+  - `HAIR_DATA = 0` — the packed RGB texture (R=alpha, G=root-to-tip, B=strand ID)
+  - `NORMAL = 1` — optional normal map (not used initially, slot reserved)
+  - Initialize map: `{{HAIR_DATA, nullptr}, {NORMAL, nullptr}}`
+- `m_textureBindingState` (unordered_map<int, bool>) for tracking GPU binding state
+- Boolean flags: `m_hasHairDataTexture`, `m_hasNormalTexture`
+- Texture setters follow PBR pattern: set flag, reset binding state to false, assign pointer, set dirty
+- Override virtual methods: `get_uniforms()`, `get_textures()`, `get_texture_binding_state()`, `set_texture_binding_state()`
+
+**Create** `ext/Vulkan-Engine/src/core/materials/hair_card.cpp`
+
+Implement `get_uniforms()` following the PBR material pattern (`physically_based.cpp`). Pack into 8 Vec4 slots of `Graphics::MaterialUniforms`:
+```
+dataSlot1: {hairColor.r, hairColor.g, hairColor.b, alphaThreshold}
+dataSlot2: {roughness, specularIntensity, specularShift, colorVariation}
+dataSlot3: {rootColor.r, rootColor.g, rootColor.b, (float)hasHairDataTexture}
+dataSlot4: {tipColor.r, tipColor.g, tipColor.b, (float)hasNormalTexture}
+dataSlot5-8: Vec4(0.0) — reserved for future use
+```
+
+Status: [x] — `hair_card.h` and `hair_card.cpp` created.
+
+### Task 2: Create `hair_card.glsl` forward shader
+
+**Create** `ext/Vulkan-Engine/resources/shaders/forward/hair_card.glsl`
+
+Unified vertex + fragment shader using the engine's `#shader vertex` / `#shader fragment` directive format.
+
+**Vertex shader** (same structure as `physically_based.glsl`):
+- `#version 460`
+- `#include camera.glsl` and `#include object.glsl`
+- Inputs: `layout(location = 0) in vec3 pos`, `layout(location = 1) in vec3 normal`, `layout(location = 2) in vec2 uv`, `layout(location = 3) in vec3 tangent`
+- Outputs: `v_pos` (view-space), `v_normal` (view-space), `v_modelNormal`, `v_uv`, `v_modelPos`, `v_screenExtent`, `v_TBN` (mat3), `v_tangent` (view-space tangent for Kajiya-Kay)
+- Transform logic identical to PBR vertex shader
+- UV: `v_uv = vec2(uv.x, 1.0 - uv.y)` (may need to test with/without flip)
+
+**Fragment shader**:
+- `#version 460`, extensions for ray tracing/ray query (same as PBR)
+- Includes: `camera.glsl`, `light.glsl`, `scene.glsl`, `object.glsl`, `utils.glsl`, `shadow_mapping.glsl`, `fresnel.glsl`, `IBL.glsl`, `reindhart.glsl`, `raytracing.glsl`
+- Material uniform block (set=1, binding=1) matching the `get_uniforms()` layout above
+- Texture samplers: `layout(set = 2, binding = 0) uniform sampler2D hairDataTex;`
+- Global uniforms: shadow map (set=0 binding=2), irradiance map (set=0 binding=4), TLAS (set=0 binding=5), blue noise (set=0 binding=6)
+- 7 MRT outputs matching forward pass: outColor, outBrightColor, outNormals, outAlbedoMask, outDiffuseIrr, outBackIrr, outLinearDepth
+
+**Fragment logic**:
+1. Sample packed texture: `vec4 texData = texture(hairDataTex, v_uv);`
+2. Alpha test: `if (texData.r < material.alphaThreshold) discard;`
+3. Compute base color:
+   - Root-to-tip: `vec3 baseColor = mix(material.rootColor, material.tipColor, texData.g);`
+   - Strand variation: `baseColor *= (1.0 + material.colorVariation * (texData.b - 0.5));`
+4. Kajiya-Kay anisotropic specular (per-light):
+   - `vec3 T = normalize(v_tangent);` (view-space tangent)
+   - `float sinTL = sqrt(1.0 - pow2(dot(T, wi)));`
+   - `float sinTV = sqrt(1.0 - pow2(dot(T, V)));`
+   - Primary: `float spec1 = pow(sinTL * sinTV - dot(T, wi) * dot(T, V), specExponent);`
+   - Secondary: shift tangent by `specularShift`, compute again with different exponent
+   - Scale by `specularIntensity`
+5. Diffuse: Lambert `max(dot(N, wi), 0.0) * radiance * baseColor`
+6. Shadow mapping: same as PBR shader (VSM, classic, or raytraced depending on light settings)
+7. IBL ambient: `computeAmbient()` from `IBL.glsl` (or simple `ambientColor * ambientIntensity * baseColor`)
+8. MRT outputs:
+   - `outColor = vec4(color, 1.0);` (alpha test already discarded transparent fragments)
+   - `outBrightColor` = bloom threshold check
+   - `outNormals = vec4(v_normal, 0.0);`
+   - `outAlbedoMask = vec4(baseColor, 0.0);` (scatterMask = 0, skip SSS for hair cards)
+   - `outDiffuseIrr = vec4(diffuseIrr, 0.0);`
+   - `outBackIrr = vec4(backIrr, 0.0);`
+   - `outLinearDepth = vec4(gl_FragCoord.z, 0.0, 0.0, 0.0);`
+
+Status: [x] — `hair_card.glsl` created with Kajiya-Kay lighting, alpha test, 7 MRT outputs, IBL ambient.
+
+### Task 3: Register shader pass in forward renderer
+
+**Modify** `ext/Vulkan-Engine/src/core/passes/forward_pass.cpp`
+
+In `setup_shader_passes()`, add after the `HAIR_STR_EPIC_TYPE` block (after line 331) and before the Disney hair block (line 334):
+
+```cpp
+GraphicShaderPass* hairCardPass =
+    new GraphicShaderPass(m_device->get_handle(), m_renderpass, m_imageExtent, ENGINE_RESOURCES_PATH "shaders/forward/hair_card.glsl");
+hairCardPass->settings.descriptorSetLayoutIDs = {{GLOBAL_LAYOUT, true}, {OBJECT_LAYOUT, true}, {OBJECT_TEXTURE_LAYOUT, true}};
+hairCardPass->graphicSettings.attributes      = {
+    {POSITION_ATTRIBUTE, true}, {NORMAL_ATTRIBUTE, true}, {UV_ATTRIBUTE, true}, {TANGENT_ATTRIBUTE, true}, {COLOR_ATTRIBUTE, false}};
+hairCardPass->graphicSettings.blendAttachments = blendAttachments;
+hairCardPass->graphicSettings.dynamicStates    = dynamicStates;
+hairCardPass->graphicSettings.samples          = samples;
+m_shaderPasses[IMaterial::Type::HAIR_CARD_TYPE] = hairCardPass;
+```
+
+Key points:
+- Topology = `VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST` (default, unlike hair strands which use LINE_LIST)
+- `OBJECT_TEXTURE_LAYOUT = true` so material textures get bound
+- All vertex attributes except COLOR enabled (OBJ has pos/normal/uv, tangents computed by loader)
+- No push constants needed (unlike HAIR_STR_EPIC_TYPE)
+- No geometry shader needed (unlike hair strands)
+
+Also need to add `#include <engine/core/materials/hair_card.h>` at top of this file if not already pulled in via `core.h` (check — `forward_pass.cpp` includes `forward_pass.h` which includes `pass.h`, need to verify include chain reaches `hair_card.h`; the `#include <engine/core/materials/hair.h>` at line 1 suggests materials are included directly, so add `hair_card.h` there too).
+
+Status: [x] — Hair card shader pass registered in `forward_pass.cpp` after `HAIR_STR_EPIC_TYPE` block (TRIANGLE_LIST topology, pos/normal/uv/tangent attributes, OBJECT_TEXTURE_LAYOUT enabled).
+
+### Task 4: Alpha-tested shadow pass for hair cards
+
+**Create** `ext/Vulkan-Engine/resources/shaders/shadows/shadows_alpha_geom.glsl`
+
+Based on the existing `shadows_geom.glsl` (which has a geometry shader for layered rendering into shadow map array). Modifications:
+- **Vertex shader**: Add `layout(location = 2) in vec2 uv;` input. Pass `v_uv` to geometry shader.
+- **Geometry shader**: Pass through `v_uv` from vertex to fragment (add `in vec2 gs_uv[]` and `out vec2 v_uv`).
+- **Fragment shader**: Instead of empty fragment, sample the hair data texture R channel:
+  ```glsl
+  layout(set = 1, binding = 1) uniform MaterialUniforms { ... alphaThreshold ... } material;
+  layout(set = 2, binding = 0) uniform sampler2D hairDataTex;
+  
+  void main() {
+      float alpha = texture(hairDataTex, v_uv).r;
+      if (alpha < material.alphaThreshold) discard;
+  }
+  ```
+
+**Modify** `ext/Vulkan-Engine/src/core/passes/shadow_pass.cpp`:
+
+1. **`setup_uniforms()`**: Add a texture descriptor layout for set 2 with 1 combined image sampler binding (for the hair data texture). This mirrors what the forward pass has for `OBJECT_TEXTURE_LAYOUT`.
+
+2. **`setup_shader_passes()`**: Add a third shader pass after line 115:
+   ```cpp
+   GraphicShaderPass* depthAlphaPass =
+       new GraphicShaderPass(m_device->get_handle(), m_renderpass, m_imageExtent, ENGINE_RESOURCES_PATH "shaders/shadows/shadows_alpha_geom.glsl");
+   depthAlphaPass->settings = settings;
+   depthAlphaPass->settings.descriptorSetLayoutIDs = {{GLOBAL_LAYOUT, true}, {OBJECT_LAYOUT, true}, {OBJECT_TEXTURE_LAYOUT, true}};
+   depthAlphaPass->graphicSettings = gfxSettings;
+   depthAlphaPass->graphicSettings.attributes = {
+       {POSITION_ATTRIBUTE, true}, {NORMAL_ATTRIBUTE, false}, {UV_ATTRIBUTE, true}, {TANGENT_ATTRIBUTE, false}, {COLOR_ATTRIBUTE, false}};
+   depthAlphaPass->build_shader_stages();
+   depthAlphaPass->build(m_descriptorPool);
+   m_shaderPasses[2] = depthAlphaPass;
+   ```
+
+3. **`render()`**: Update shader pass selection logic (line 146):
+   ```cpp
+   // Before: ShaderPass* shaderPass = mat->get_type() != IMaterial::Type::HAIR_STR_TYPE ? m_shaderPasses[0] : m_shaderPasses[1];
+   // After:
+   ShaderPass* shaderPass;
+   if (mat->get_type() == IMaterial::Type::HAIR_STR_TYPE)
+       shaderPass = m_shaderPasses[1];  // line geometry
+   else if (mat->get_type() == IMaterial::Type::HAIR_CARD_TYPE)
+       shaderPass = m_shaderPasses[2];  // alpha-tested triangles
+   else
+       shaderPass = m_shaderPasses[0];  // opaque triangles
+   ```
+   For HAIR_CARD_TYPE, also bind the material's texture descriptor set at set 2 (same pattern as forward pass):
+   ```cpp
+   if (mat->get_type() == IMaterial::Type::HAIR_CARD_TYPE)
+       cmd.bind_descriptor_set(mat->get_texture_descriptor(), 2, *shaderPass);
+   ```
+
+Need to verify the existing shadow shader (`shadows_geom.glsl`) structure first — it uses a geometry shader for layered rendering into the shadow map array. The alpha variant must preserve this layered rendering while adding UV passthrough and fragment discard.
+
+Status: [x] — Created `shadows_alpha_geom.glsl` (vertex passes UV with Y-flip, geometry layers per-light with UV passthrough, fragment discards on R < alphaThreshold). Modified `shadow_pass.cpp`: added 7-binding OBJECT_TEXTURE_LAYOUT in `setup_uniforms()` (matches forward pass for descriptor set compatibility); added `m_shaderPasses[2]` with UV attribute enabled and OBJECT_TEXTURE_LAYOUT enabled; updated `render()` to three-way pass selection and bind texture descriptor for HAIR_CARD_TYPE.
+
+### Task 5: Add include in `core.h`
+
+**Modify** `ext/Vulkan-Engine/include/engine/core.h`
+
+Add after line 26 (`#include <engine/core/materials/hair_disney.h>`):
+```cpp
+#include <engine/core/materials/hair_card.h>
+```
+
+This ensures `HairCardMaterial` is available to any file that includes `<engine/core.h>`, including `application.cpp`.
+
+Status: [x] — Added `#include <engine/core/materials/hair_card.h>` after `hair_disney.h` in `core.h`.
+
+### Task 6: Wire up in application
+
+**Modify** `src/application.cpp`
+
+In `setup()`, inside the `#ifdef USE_GLB_MODELS` block, after the strand hair setup (after line 102), add:
+
+```cpp
+Mesh* hairCards = new Mesh();
+Tools::Loaders::load_3D_file(hairCards, MESH_PATH + "hair_fauxmohawk.obj", false);
+hairCards->set_position({0.0f, -12.6f, 0.2f});  // match character transform
+hairCards->set_scale(10.0f);                      // match character scale
+hairCards->set_rotation({0.0f, 180.0f, 0.0f});   // match character rotation
+
+HairCardMaterial* hcMat = new HairCardMaterial();
+hcMat->set_hair_color(Vec3(0.05f, 0.02f, 0.01f));  // dark brown base
+
+Texture* hairDataTex = new Texture();
+// IMPORTANT: Load as TEXTURE_FORMAT_TYPE_NORMAL (linear, not sRGB)
+// because R/G/B encode data (alpha, gradient, ID), not perceptual color
+Tools::Loaders::load_texture(hairDataTex, TEXTURE_PATH + "hair_fauxmohawk.PNG", TEXTURE_FORMAT_TYPE_NORMAL);
+hcMat->set_hair_data_texture(hairDataTex);
+
+hairCards->push_material(hcMat);
+hairCards->set_name("HairCards");
+m_scene->add(hairCards);  // added after character and strand hair for render order
+```
+
+Transform values (`position`, `scale`, `rotation`) will likely need tuning — the OBJ may already be in the character's local space (from the Unreal export) or may need adjustment. The initial values match the character mesh (`maria.glb`) transforms as a starting point.
+
+Status: [x] — Added hair card mesh/material/texture setup in `application.cpp` inside `#ifdef USE_GLB_MODELS`, after strand hair block. `hair_fauxmohawk.obj` loaded synchronously; `HairCardMaterial` created with dark-brown base color; `hair_fauxmohawk.PNG` loaded as `TEXTURE_FORMAT_TYPE_NORMAL` (linear). Transform matches `maria.glb`.
+
+### Task 7: Build and validate
+
+1. **Build**: `cd build && cmake .. && cmake --build .`
+2. **Debug test**: `./HairViewer --frames 10 --log-level warn` — check `debug_trace.log` for validation errors
+3. **Visual test** (user performs): Run interactively, verify:
+   - Hair cards render with correct alpha cutout (strand silhouettes, not solid rectangles)
+   - Base hair color uniform applies correctly (dark brown)
+   - Root-to-tip gradient visible (color changes from root to tip using G channel)
+   - Kajiya-Kay specular highlights follow the hair tangent direction (anisotropic sheen)
+   - Shadows show correct alpha-tested silhouette (not solid card shadows)
+   - Existing strand hair still renders alongside cards (both visible)
+   - No visual regressions in head/eyes rendering
+4. **Tuning**: Transform, color, alpha threshold, specular parameters will likely need adjustment after first visual test
+
+Status: [x] — Build clean (MSVC Debug). 10-frame headless run: zero new Vulkan validation errors or warnings from hair card code. Pre-existing warnings (STORAGE_IMAGE pool, swapchain semaphore reuse) unchanged from before this feature. Visual test pending user review.
+
+### Files Summary
+
+| Action | File | Purpose |
+|--------|------|---------|
+| Create | `ext/Vulkan-Engine/include/engine/core/materials/hair_card.h` | Material class definition |
+| Create | `ext/Vulkan-Engine/src/core/materials/hair_card.cpp` | `get_uniforms()` implementation |
+| Create | `ext/Vulkan-Engine/resources/shaders/forward/hair_card.glsl` | Forward rendering shader with Kajiya-Kay |
+| Create | `ext/Vulkan-Engine/resources/shaders/shadows/shadows_alpha_geom.glsl` | Alpha-tested shadow shader |
+| Modify | `ext/Vulkan-Engine/src/core/passes/forward_pass.cpp` | Register hair card shader pass (~10 lines) |
+| Modify | `ext/Vulkan-Engine/src/core/passes/shadow_pass.cpp` | Add alpha-tested shadow pass + render selection |
+| Modify | `ext/Vulkan-Engine/include/engine/core.h` | Add `#include` (1 line) |
+| Modify | `src/application.cpp` | Scene setup (~15 lines) |
+
+CMake picks up new `.cpp`/`.h` files automatically via `GLOB_RECURSE` in `add_module_files.cmake`.
+
+### Risks & Notes
+
+- **UV flip**: The PBR shader does `1-uv.y`. The MetaHuman OBJ may or may not need this — test both if alpha mask looks wrong.
+- **Tangent quality**: OBJ loader computes tangents via Gram-Schmidt (`compute_tangents_gram_smidt()`). If Kajiya-Kay highlights look wrong, may need to derive tangent from UV gradient in shader instead.
+- **Texture format**: Must load as `TEXTURE_FORMAT_TYPE_NORMAL` (linear, `RGBA_8U`) not color (`SRGBA_8`), since R/G/B encode data, not perceptual color. If loaded as sRGB, the gamma correction will distort the alpha threshold and gradient values.
+- **Render order**: Hair cards are added after opaque geometry in the scene, which helps early-z rejection. No explicit sort needed since we use alpha test (discard), not alpha blending.
+- **Double-sided**: Hair cards default to `faceCulling = false` since they are thin planar geometry that may be viewed from either side.
+- **Shadow pass texture descriptor**: The existing shadow pass only has 2 descriptor set layouts (GLOBAL + OBJECT). Adding OBJECT_TEXTURE_LAYOUT for the alpha-tested pass requires adding the layout to the shadow pass's descriptor pool — need to verify pool allocation is sufficient.
+
+---

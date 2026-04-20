@@ -75,6 +75,7 @@ void HairViewer::setup() {
     Mesh* character = new Mesh();
     std::vector<Texture*> glbTextures;
     Tools::Loaders::load_GLB(character, MESH_PATH + "maria.glb", 0, &glbTextures);
+    character->set_position({0.0f, -12.6f, 0.2f});
     character->set_scale(10.0f);
     character->set_rotation({0.0f, 180.0f, 0.0f});
     auto charMat = new PhysicallyBasedMaterial();
@@ -86,6 +87,37 @@ void HairViewer::setup() {
     character->push_material(charMat);
     character->set_name("Maria");
     m_scene->add(character);
+
+    //Mesh* hair = new Mesh();
+    //Tools::Loaders::load_3D_file(hair, MESH_PATH + "straight.hair", false);
+    //hair->set_position({0.0f, 2.9f, -0.2f});
+    //// hair->set_scale(0.053f);
+    //hair->set_scale(0.025f);
+    //hair->set_rotation({90.0, 180.0f, -90.0f});
+    //// HairDisneyMaterial* hmat = new HairDisneyMaterial();
+    //HairEpicMaterial* hmat = new HairEpicMaterial();
+    //hmat->set_thickness(0.0015f);
+    //hair->push_material(hmat);
+    //hair->set_name("Hair");
+    //m_scene->add(hair);
+
+    Mesh* hairCards = new Mesh();
+    Tools::Loaders::load_3D_file(hairCards, MESH_PATH + "hair_fauxmohawk.obj", false);
+    hairCards->set_position({0.0f, -12.6f, 0.2f});
+    hairCards->set_scale(0.1f);
+    hairCards->set_rotation({0.0f, 180.0f, 0.0f});
+
+    HairCardMaterial* hcMat = new HairCardMaterial();
+    hcMat->set_hair_color(Vec3(0.05f, 0.02f, 0.01f));
+
+    Texture* hairDataTex = new Texture();
+    Tools::Loaders::load_texture(hairDataTex, TEXTURE_PATH + "hair_fauxmohawk.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hcMat->set_hair_data_texture(hairDataTex);
+
+    hairCards->push_material(hcMat);
+    hairCards->set_name("HairCards");
+    m_scene->add(hairCards);
+
 #elif defined(USE_NEURAL_MODELS)
     // load_neural_avatar(
     //     RESOURCES_PATH "models/neural_hair_PABLO.ply", RESOURCES_PATH "models/neural_head_PABLO.ply", "Pablo", {0.32, 0.12, 1.0}, Vec3(0.0), -175.0f);

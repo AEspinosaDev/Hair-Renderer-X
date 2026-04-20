@@ -24,6 +24,7 @@
 #include <engine/core/materials/unlit.h>
 #include <engine/core/materials/hair.h>
 #include <engine/core/materials/hair_disney.h>
+#include <engine/core/materials/hair_card.h>
 
 #include <engine/core/scene/object3D.h>
 #include <engine/core/scene/camera.h>

@@ -53,6 +53,17 @@ void ShadowPass::setup_uniforms(std::vector<Graphics::Frame>& frames) {
     LayoutBinding materialBufferBinding(UNIFORM_DYNAMIC_BUFFER, SHADER_STAGE_VERTEX | SHADER_STAGE_GEOMETRY | SHADER_STAGE_FRAGMENT, 1);
     m_descriptorPool.set_layout(OBJECT_LAYOUT, {objectBufferBinding, materialBufferBinding});
 
+    // MATERIAL TEXTURE SET — layout must match forward pass exactly (7 fragment-only samplers)
+    // so that descriptor sets allocated by the forward pass can be bound here for alpha-tested shadows.
+    LayoutBinding texB0(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 0);
+    LayoutBinding texB1(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 1);
+    LayoutBinding texB2(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 2);
+    LayoutBinding texB3(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 3);
+    LayoutBinding texB4(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 4);
+    LayoutBinding texB5(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 5);
+    LayoutBinding texB6(UNIFORM_COMBINED_IMAGE_SAMPLER, SHADER_STAGE_FRAGMENT, 6);
+    m_descriptorPool.set_layout(OBJECT_TEXTURE_LAYOUT, {texB0, texB1, texB2, texB3, texB4, texB5, texB6});
+
     for (size_t i = 0; i < frames.size(); i++)
     {
         // Global
@@ -113,6 +124,18 @@ void ShadowPass::setup_shader_passes() {
     depthLinePass->build_shader_stages();
     depthLinePass->build(m_descriptorPool);
     m_shaderPasses[1] = depthLinePass;
+
+    // [2] Alpha-tested triangles — hair cards (reads opacity from texture, discards transparent fragments)
+    GraphicShaderPass* depthHairCardPass =
+        new GraphicShaderPass(m_device->get_handle(), m_renderpass, m_imageExtent, ENGINE_RESOURCES_PATH "shaders/shadows/shadows_alpha_geom.glsl");
+    depthHairCardPass->settings        = settings;
+    depthHairCardPass->settings.descriptorSetLayoutIDs = {{GLOBAL_LAYOUT, true}, {OBJECT_LAYOUT, true}, {OBJECT_TEXTURE_LAYOUT, true}};
+    depthHairCardPass->graphicSettings = gfxSettings;
+    depthHairCardPass->graphicSettings.attributes = {
+        {POSITION_ATTRIBUTE, true}, {NORMAL_ATTRIBUTE, false}, {UV_ATTRIBUTE, true}, {TANGENT_ATTRIBUTE, false}, {COLOR_ATTRIBUTE, false}};
+    depthHairCardPass->build_shader_stages();
+    depthHairCardPass->build(m_descriptorPool);
+    m_shaderPasses[2] = depthHairCardPass;
 }
 
 void ShadowPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint32_t presentImageIndex) {
@@ -143,7 +166,13 @@ void ShadowPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint3
                     Geometry*  g   = m->get_geometry(i);
                     IMaterial* mat = m->get_material(g->get_material_ID());
 
-                    ShaderPass* shaderPass = mat->get_type() != IMaterial::Type::HAIR_STR_TYPE ? m_shaderPasses[0] : m_shaderPasses[1];
+                    ShaderPass* shaderPass;
+                    if (mat->get_type() == IMaterial::Type::HAIR_STR_TYPE)
+                        shaderPass = m_shaderPasses[1];
+                    else if (mat->get_type() == IMaterial::Type::HAIR_CARD_TYPE)
+                        shaderPass = m_shaderPasses[2];
+                    else
+                        shaderPass = m_shaderPasses[0];
 
                     cmd.set_depth_test_enable(mat->get_parameters().depthTest);
                     cmd.set_depth_write_enable(mat->get_parameters().depthWrite);
@@ -154,6 +183,9 @@ void ShadowPass::render(Graphics::Frame& currentFrame, Scene* const scene, uint3
                     cmd.bind_descriptor_set(m_descriptors[currentFrame.index].globalDescritor, 0, *shaderPass, {0, 0});
                     // PER OBJECT LAYOUT BINDING
                     cmd.bind_descriptor_set(m_descriptors[currentFrame.index].objectDescritor, 1, *shaderPass, {objectOffset, objectOffset});
+                    // TEXTURE LAYOUT BINDING (hair cards only — alpha test requires opacity texture)
+                    if (mat->get_type() == IMaterial::Type::HAIR_CARD_TYPE)
+                        cmd.bind_descriptor_set(mat->get_texture_descriptor(), 2, *shaderPass);
 
                     // DRAW
                     cmd.draw_geometry(*get_VAO(g));
