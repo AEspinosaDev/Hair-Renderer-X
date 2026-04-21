@@ -3,6 +3,7 @@
 
 // #define USE_NEURAL_MODELS
 #define USE_GLB_MODELS
+#define LOAD_ALEX
 
 void HairViewer::init(Systems::RendererSettings settings) {
     m_window = new WindowGLFW("Hair Viewer", 1024, 1024);
@@ -72,52 +73,151 @@ void HairViewer::setup() {
     m_scene->add(light);
 
 #ifdef USE_GLB_MODELS
-    Mesh* character = new Mesh();
-    std::vector<Texture*> glbTextures;
-    Tools::Loaders::load_GLB(character, MESH_PATH + "maria.glb", 0, &glbTextures);
-    character->set_position({0.0f, -12.6f, 0.2f});
-    character->set_scale(10.0f);
-    character->set_rotation({0.0f, 180.0f, 0.0f});
-    auto charMat = new PhysicallyBasedMaterial();
-    if (!glbTextures.empty())
-        charMat->set_albedo_texture(glbTextures[0]);
-    charMat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
-    charMat->set_metalness(0.0f);
-    charMat->set_roughness(0.5f);
-    character->push_material(charMat);
-    character->set_name("Maria");
-    m_scene->add(character);
 
-    //Mesh* hair = new Mesh();
-    //Tools::Loaders::load_3D_file(hair, MESH_PATH + "straight.hair", false);
-    //hair->set_position({0.0f, 2.9f, -0.2f});
-    //// hair->set_scale(0.053f);
-    //hair->set_scale(0.025f);
-    //hair->set_rotation({90.0, 180.0f, -90.0f});
-    //// HairDisneyMaterial* hmat = new HairDisneyMaterial();
-    //HairEpicMaterial* hmat = new HairEpicMaterial();
-    //hmat->set_thickness(0.0015f);
-    //hair->push_material(hmat);
-    //hair->set_name("Hair");
-    //m_scene->add(hair);
+    // ALEX
+    #ifdef LOAD_ALEX
+    Mesh* character0 = new Mesh();
+    std::vector<Texture*> glbTextures0;
+    Tools::Loaders::load_GLB(character0, MESH_PATH + "alex/alex.glb", 0, &glbTextures0);
+    character0->set_position({0.0f, -12.6f, 0.2f});
+    character0->set_scale(10.0f);
+    character0->set_rotation({0.0f, 180.0f, 0.0f});
+    auto char0Mat = new PhysicallyBasedMaterial();
+    if (!glbTextures0.empty())
+        char0Mat->set_albedo_texture(glbTextures0[0]);
+    char0Mat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
+    char0Mat->set_metalness(0.0f);
+    char0Mat->set_roughness(0.5f);
+    character0->push_material(char0Mat);
+    character0->set_name("Alex");
+    m_scene->add(character0);
 
-    Mesh* hairCards = new Mesh();
-    Tools::Loaders::load_3D_file(hairCards, MESH_PATH + "hair_fauxmohawk.obj", false);
-    hairCards->set_position({0.0f, -12.6f, 0.2f});
-    hairCards->set_scale(0.1f);
-    hairCards->set_rotation({0.0f, 180.0f, 0.0f});
+    Vec3 hairCards0_offset = Vec3{0.0f, 0.8f, 0.2f};
+    Mesh* hairCards0 = new Mesh();
+    Tools::Loaders::load_3D_file(hairCards0, MESH_PATH + "alex/hair_fauxmohawk.obj", false);
+    hairCards0->set_position(character0->get_position() + hairCards0_offset);
+    hairCards0->set_scale(0.1f);
+    hairCards0->set_rotation({0.0f, 180.0f, 0.0f});
+    HairCardMaterial* hc0Mat = new HairCardMaterial();
+    hc0Mat->set_hair_color(Vec3(0.05f, 0.02f, 0.01f));
+    Texture* hair0DataTex = new Texture();
+    Tools::Loaders::load_texture(hair0DataTex, TEXTURE_PATH + "alex/hair_fauxmohawk_attribute.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hc0Mat->set_hair_data_texture(hair0DataTex);
+    Texture* hair0TangentTex = new Texture();
+    Tools::Loaders::load_texture(hair0TangentTex, TEXTURE_PATH + "alex/hair_fauxmohawk_tangent.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hc0Mat->set_tangent_texture(hair0TangentTex);
+    hairCards0->push_material(hc0Mat);
+    hairCards0->set_name("HairCards0");
+    m_scene->add(hairCards0);
 
-    HairCardMaterial* hcMat = new HairCardMaterial();
-    hcMat->set_hair_color(Vec3(0.05f, 0.02f, 0.01f));
+    // JAVI
+    #elif defined(LOAD_JAVI)
+    Mesh* character1 = new Mesh();
+    std::vector<Texture*> glbTextures1;
+    Tools::Loaders::load_GLB(character1, MESH_PATH + "javi/javi.glb", 0, &glbTextures1);
+    character1->set_position({0.0f, -12.6f, 0.2f});
+    character1->set_scale(10.0f);
+    character1->set_rotation({0.0f, 180.0f, 0.0f});
+    auto char1Mat = new PhysicallyBasedMaterial();
+    if (!glbTextures1.empty())
+        char1Mat->set_albedo_texture(glbTextures1[0]);
+    char1Mat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
+    char1Mat->set_metalness(0.0f);
+    char1Mat->set_roughness(0.5f);
+    character1->push_material(char1Mat);
+    character1->set_name("Javi");
+    m_scene->add(character1);
 
-    Texture* hairDataTex = new Texture();
-    Tools::Loaders::load_texture(hairDataTex, TEXTURE_PATH + "hair_fauxmohawk.png", TEXTURE_FORMAT_TYPE_NORMAL);
-    hcMat->set_hair_data_texture(hairDataTex);
+    Vec3  hairCards1_offset = Vec3{0.0f, -0.55f, 0.1f};
+    Mesh* hairCards1 = new Mesh();
+    Tools::Loaders::load_3D_file(hairCards1, MESH_PATH + "javi/hair_brushcut.obj", false);
+    hairCards1->set_position(character1->get_position() + hairCards1_offset);
+    hairCards1->set_scale(0.1f);
+    hairCards1->set_rotation({0.0f, 180.0f, 0.0f});
+    HairCardMaterial* hc1Mat = new HairCardMaterial();
+    hc1Mat->set_hair_color(Vec3(0.05f, 0.02f, 0.01f));
+    Texture* hair1DataTex = new Texture();
+    Tools::Loaders::load_texture(hair1DataTex, TEXTURE_PATH + "javi/hair_brushcut_attribute.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hc1Mat->set_hair_data_texture(hair1DataTex);
+    Texture* hair1TangentTex = new Texture();
+    Tools::Loaders::load_texture(hair1TangentTex, TEXTURE_PATH + "javi/hair_brushcut_tangent.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hc1Mat->set_tangent_texture(hair1TangentTex);
+    hairCards1->push_material(hc1Mat);
+    hairCards1->set_name("HairCards1");
+    m_scene->add(hairCards1);
 
-    hairCards->push_material(hcMat);
-    hairCards->set_name("HairCards");
-    m_scene->add(hairCards);
+    // MARIA
+    #elif defined(LOAD_MARIA)
+    Mesh* character2 = new Mesh();
+    std::vector<Texture*> glbTextures2;
+    Tools::Loaders::load_GLB(character2, MESH_PATH + "maria/maria.glb", 0, &glbTextures2);
+    character2->set_position({0.0f, -12.6f, 0.2f});
+    character2->set_scale(10.0f);
+    character2->set_rotation({0.0f, 180.0f, 0.0f});
+    auto char2Mat = new PhysicallyBasedMaterial();
+    if (!glbTextures2.empty())
+        char2Mat->set_albedo_texture(glbTextures2[0]);
+    char2Mat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
+    char2Mat->set_metalness(0.0f);
+    char2Mat->set_roughness(0.5f);
+    character2->push_material(char2Mat);
+    character2->set_name("Maria");
+    m_scene->add(character2);
 
+    Vec3  hairCards2_offset = Vec3{0.0f, 1.0f, -0.1f};
+    Mesh* hairCards2 = new Mesh();
+    Tools::Loaders::load_3D_file(hairCards2, MESH_PATH + "maria/hair_bobmessy.obj", false);
+    hairCards2->set_position(character2->get_position() + hairCards2_offset);
+    hairCards2->set_scale(0.1f);
+    hairCards2->set_rotation({0.0f, 180.0f, 0.0f});
+    HairCardMaterial* hc2Mat = new HairCardMaterial();
+    hc2Mat->set_hair_color(Vec3(0.05f, 0.02f, 0.01f));
+    Texture* hair2DataTex = new Texture();
+    Tools::Loaders::load_texture(hair2DataTex, TEXTURE_PATH + "maria/hair_bobmessy_attribute.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hc2Mat->set_hair_data_texture(hair2DataTex);
+    Texture* hair2TangentTex = new Texture();
+    Tools::Loaders::load_texture(hair2TangentTex, TEXTURE_PATH + "maria/hair_bobmessy_tangent.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hc2Mat->set_tangent_texture(hair2TangentTex);
+    hairCards2->push_material(hc2Mat);
+    hairCards2->set_name("HairCards2");
+    m_scene->add(hairCards2);
+
+    // NADIA
+    #elif defined(LOAD_NADIA)
+    Mesh* character3 = new Mesh();
+    std::vector<Texture*> glbTextures3;
+    Tools::Loaders::load_GLB(character3, MESH_PATH + "nadia/nadia.glb", 0, &glbTextures3);
+    character3->set_position({0.0f, -12.6f, 0.2f});
+    character3->set_scale(10.0f);
+    character3->set_rotation({0.0f, 180.0f, 0.0f});
+    auto char3Mat = new PhysicallyBasedMaterial();
+    if (!glbTextures3.empty())
+        char3Mat->set_albedo_texture(glbTextures3[0]);
+    char3Mat->set_albedo(Vec3(204.0f, 123.0f, 85.0f) / 255.0f);
+    char3Mat->set_metalness(0.0f);
+    char3Mat->set_roughness(0.5f);
+    character3->push_material(char3Mat);
+    character3->set_name("Maria");
+    m_scene->add(character3);
+
+    Vec3 hairCards3_offset = Vec3{0.0f, 0.4f, -0.1f};
+    Mesh* hairCards3 = new Mesh();
+    Tools::Loaders::load_3D_file(hairCards3, MESH_PATH + "nadia/hair_afrocurly.obj", false);
+    hairCards3->set_position(character3->get_position() + hairCards3_offset);
+    hairCards3->set_scale(0.1f);
+    hairCards3->set_rotation({0.0f, 180.0f, 0.0f});
+    HairCardMaterial* hc3Mat = new HairCardMaterial();
+    hc3Mat->set_hair_color(Vec3(0.05f, 0.02f, 0.01f));
+    Texture* hair3DataTex = new Texture();
+    Tools::Loaders::load_texture(hair3DataTex, TEXTURE_PATH + "nadia/hair_afrocurly_attribute.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hc3Mat->set_hair_data_texture(hair3DataTex);
+    Texture* hair3TangentTex = new Texture();
+    Tools::Loaders::load_texture(hair3TangentTex, TEXTURE_PATH + "nadia/hair_afrocurly_tangent.png", TEXTURE_FORMAT_TYPE_NORMAL);
+    hc3Mat->set_tangent_texture(hair3TangentTex);
+    hairCards3->push_material(hc3Mat);
+    hairCards3->set_name("HairCards3");
+    m_scene->add(hairCards3);
+#endif
 #elif defined(USE_NEURAL_MODELS)
     // load_neural_avatar(
     //     RESOURCES_PATH "models/neural_hair_PABLO.ply", RESOURCES_PATH "models/neural_head_PABLO.ply", "Pablo", {0.32, 0.12, 1.0}, Vec3(0.0), -175.0f);

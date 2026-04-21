@@ -29,7 +29,7 @@ layout(set = 1, binding = 1) uniform MaterialUniforms {
     vec3  rootColor;
     float hasHairDataTexture;
     vec3  tipColor;
-    float hasNormalTexture;
+    float hasTangentTexture;
     vec4  _pad5;
     vec4  _pad6;
     vec4  _pad7;
@@ -107,7 +107,7 @@ layout(set = 1, binding = 1) uniform MaterialUniforms {
     vec3  rootColor;
     float hasHairDataTexture;
     vec3  tipColor;
-    float hasNormalTexture;
+    float hasTangentTexture;
     vec4  _pad5;
     vec4  _pad6;
     vec4  _pad7;
@@ -116,7 +116,7 @@ layout(set = 1, binding = 1) uniform MaterialUniforms {
 
 // Texture set (2)
 layout(set = 2, binding = 0) uniform sampler2D hairDataTex; // R=alpha, G=root-to-tip, B=strand ID
-layout(set = 2, binding = 1) uniform sampler2D normalTex;   // Optional tangent-space normal map
+layout(set = 2, binding = 1) uniform sampler2D tangentTex;  // Per-pixel fiber tangent (tangent space, RGB [-1,1])
 
 // ─── Kajiya-Kay lighting ──────────────────────────────────────────────────────
 
@@ -171,17 +171,12 @@ void main() {
     baseColor      *= clamp(variation, 0.5, 2.0);
 
     // ── Surface normal ────────────────────────────────────────────────────────
-    vec3 N;
-    if (material.hasNormalTexture > 0.5) {
-        N = normalize(v_TBN * (texture(normalTex, v_uv).rgb * 2.0 - 1.0));
-    } else {
-        // Cylindrical normal warping: rotate the flat polygon normal around the
-        // tangent axis based on the U coordinate, faking a rounded cross-section
-        // so each card catches light as if it were a tube of hair.
-        const float PI = 3.14159265358979;
-        float angle = (v_uv.x - 0.5) * PI;
-        N = normalize(cos(angle) * v_TBN[2] + sin(angle) * v_TBN[1]);
-    }
+    // Cylindrical normal warping: rotate the flat polygon normal around the
+    // tangent axis based on the U coordinate, faking a rounded cross-section
+    // so each card catches light as if it were a tube of hair.
+    const float PI = 3.14159265358979;
+    float normalAngle = (v_uv.x - 0.5) * PI;
+    vec3 N = normalize(cos(normalAngle) * v_TBN[2] + sin(normalAngle) * v_TBN[1]);
 
     // ── Bump mapping from alpha channel ──────────────────────────────────────
     // Treat the R channel (opacity) as a height map and derive per-pixel normal
@@ -200,7 +195,17 @@ void main() {
     }
 
     // ── Kajiya-Kay setup ──────────────────────────────────────────────────────
-    vec3  T        = v_TBN[0];          // Fiber tangent direction (view space)
+    // Fiber tangent: per-pixel direction from the tangent map when available,
+    // otherwise fall back to the interpolated card tangent. The map encodes
+    // hair flow in tangent space (RGB remapped from [0,1] to [-1,1]) so we
+    // transform through the TBN to get the view-space direction.
+    vec3 T;
+    if (material.hasTangentTexture > 0.5) {
+        vec3 tSample = texture(tangentTex, v_uv).rgb * 2.0 - 1.0;
+        T = normalize(v_TBN * tSample);
+    } else {
+        T = v_TBN[0];
+    }
     vec3  V        = normalize(-v_pos); // View direction toward camera
     float shininess = max(1.0, (1.0 - material.roughness) * 128.0);
 

@@ -34,15 +34,15 @@ class HairCardMaterial : public IMaterial
     Vec3 m_tipColor  = {0.25f, 0.15f, 0.06f}; // Hair color at tip (blended by G channel)
 
     bool m_hasHairDataTexture = false;
-    bool m_hasNormalTexture   = false;
+    bool m_hasTangentTexture  = false;
 
     enum Textures
     {
         HAIR_DATA = 0, // Packed texture: R=alpha mask, G=root-to-tip gradient, B=strand ID
-        NORMAL    = 1, // Optional tangent-space normal map for surface detail
+        TANGENT   = 1, // Tangent-space hair flow direction (RGB remapped to [-1,1])
     };
 
-    std::unordered_map<int, ITexture*> m_textures{{HAIR_DATA, nullptr}, {NORMAL, nullptr}};
+    std::unordered_map<int, ITexture*> m_textures{{HAIR_DATA, nullptr}, {TANGENT, nullptr}};
     std::unordered_map<int, bool>      m_textureBindingState;
 
     virtual Graphics::MaterialUniforms                get_uniforms() const;
@@ -137,14 +137,14 @@ class HairCardMaterial : public IMaterial
         m_isDirty                        = true;
     }
 
-    inline ITexture* get_normal_texture() {
-        return m_textures[NORMAL];
+    inline ITexture* get_tangent_texture() {
+        return m_textures[TANGENT];
     }
-    inline void set_normal_texture(ITexture* t) {
-        m_hasNormalTexture             = t ? true : false;
-        m_textureBindingState[NORMAL]  = false;
-        m_textures[NORMAL]             = t;
-        m_isDirty                      = true;
+    inline void set_tangent_texture(ITexture* t) {
+        m_hasTangentTexture             = t ? true : false;
+        m_textureBindingState[TANGENT]  = false;
+        m_textures[TANGENT]             = t;
+        m_isDirty                       = true;
     }
 };
 
