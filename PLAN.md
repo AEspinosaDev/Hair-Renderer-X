@@ -443,3 +443,231 @@ CMake picks up new `.cpp`/`.h` files automatically via `GLOB_RECURSE` in `add_mo
 - **Shadow pass texture descriptor**: The existing shadow pass only has 2 descriptor set layouts (GLOBAL + OBJECT). Adding OBJECT_TEXTURE_LAYOUT for the alpha-tested pass requires adding the layout to the shadow pass's descriptor pool — need to verify pool allocation is sufficient.
 
 ---
+
+## GLB Animation Driven by a JSON Timeline
+
+### Goal
+
+Animate the four GLB characters (`alex`, `javi`, `maria`, `nadia`) by feeding a JSON timeline of per-frame parameter values. Each GLB already ships with **55 skeletal joints** and **100 POSITION morph targets** (parsed and stored in `SkinData` / `MorphTargetData`), but those channels are currently dormant — no GPU consumption, no timeline evaluation.
+
+In production we will receive a JSON file whose exact schema is **not yet known**. The implementation must keep the JSON → animation pipeline behind a thin adapter so that only the adapter changes when the production schema is finalized.
+
+### Guiding Principles
+
+1. **Schema-agnostic core.** An internal IR (`Animation`, `Track`, `Keyframe`) describes animation data. Adapters convert arbitrary JSON into this IR. Everything downstream (sampling, GPU upload, render) consumes only the IR.
+2. **No speculative generality inside the renderer.** The renderer gains one animation system (morph weights + joint transforms). It does not try to support "any possible animatable property" — just the parameters the GLBs actually expose.
+3. **Decoupled evaluation and consumption.** The timeline evaluator runs on CPU per frame and produces a plain buffer of (morph weights, joint matrices). The GPU stages that consume these buffers do not know about JSON, tracks, or interpolation.
+
+---
+
+### Step 1: Inspect the GLB Parameters [x]
+
+**Goal**: Confirm what parameters are truly animatable across the four files, and capture the canonical names.
+
+**Actions**:
+- Add a one-off debug utility (gated behind a CLI flag, e.g. `--inspect-glb <path>`) in `src/main.cpp` that calls a new `Tools::Loaders::inspect_GLB()` and logs:
+  - `model.animations[*]` — any baked glTF animations (channels, samplers, node targets, interpolation). If present, the easiest path is to consume these directly.
+  - `model.skins[0].joints[*]` — joint node names (55 expected).
+  - `model.meshes[*].extras["targetNames"]` — morph target names (100 expected on mesh 0).
+  - `model.nodes[*]` — node TRS so the bind pose can be reconstructed.
+- Save a reference dump for each of the four files under `resources/models/<char>/<char>.glb.params.txt` (gitignored or checked in — user's choice) for later mapping in the JSON adapter.
+
+**Deliverable**: a table, appended below, of actual joint names and morph target names per character. This governs the adapter's mapping logic.
+
+---
+
+### Step 2: Internal Animation IR [x]
+
+**Create** `ext/Vulkan-Engine/include/engine/core/animation.h`
+
+```cpp
+namespace Core {
+
+enum class AnimationTargetType {
+    MORPH_WEIGHT,         // target float in [0,1], one per morph target
+    JOINT_TRANSLATION,    // vec3
+    JOINT_ROTATION,       // quat (stored as vec4)
+    JOINT_SCALE,          // vec3
+    NODE_TRANSLATION,     // vec3 (root-level convenience, e.g. body translate)
+    NODE_ROTATION,
+    NODE_SCALE,
+};
+
+enum class InterpolationMode { STEP, LINEAR, CUBICSPLINE };
+
+struct Keyframe {
+    float time;      // seconds
+    Vec4  value;     // 1..4 floats packed; scalar morphs use .x only
+};
+
+struct Track {
+    AnimationTargetType type;
+    std::string         targetName;   // joint name or morph target name
+    InterpolationMode   interp = InterpolationMode::LINEAR;
+    std::vector<Keyframe> keyframes;  // sorted by time
+};
+
+struct Animation {
+    std::string        name;
+    float              duration = 0.0f;
+    float              fps      = 30.0f;       // reference only; we sample by time
+    std::vector<Track> tracks;
+};
+
+// Sampled output for one frame, consumed by the renderer.
+struct AnimationPose {
+    std::vector<float> morphWeights;  // size = morph target count
+    std::vector<Mat4>  jointMatrices; // size = joint count (local → bind space)
+};
+
+} // namespace Core
+```
+
+**Create** `ext/Vulkan-Engine/src/core/animation.cpp`
+
+- `Animation::sample(float tSeconds, const SkinData&, const MorphTargetData&, AnimationPose& out)` — walks tracks, finds the bracket of keyframes, interpolates, writes into `out`. Handles wrapping (loop vs clamp) as a flag on `Animation`.
+- Linear search per track is fine for ≤100 tracks × a few hundred keys; no acceleration structure needed.
+
+---
+
+### Step 3: JSON → IR Adapter (the generic surface) [x]
+
+**Create** `ext/Vulkan-Engine/include/engine/core/animation_json.h`
+
+```cpp
+namespace Core {
+
+// Adapter interface: a stateless strategy that parses nlohmann::json into Animation.
+// Production will add a new adapter class without touching the rest of the pipeline.
+class IAnimationJsonAdapter {
+public:
+    virtual ~IAnimationJsonAdapter() = default;
+    virtual Animation parse(const nlohmann::json& root,
+                            const SkinData&      skin,      // for name → index mapping
+                            const MorphTargetData& morphs) = 0;
+};
+
+// Default adapter that understands an explicit internal schema (documented below).
+class DefaultAnimationJsonAdapter : public IAnimationJsonAdapter { ... };
+
+// Entry point:
+Animation load_animation_json(const std::string& path,
+                              const SkinData&    skin,
+                              const MorphTargetData& morphs,
+                              IAnimationJsonAdapter* adapter = nullptr); // uses default if null
+```
+
+**Default (internal) JSON schema** — used for initial testing. The production adapter will replace this class, not modify it:
+
+```jsonc
+{
+  "name": "demo",
+  "duration": 3.0,
+  "fps": 30.0,
+  "loop": true,
+  "tracks": [
+    { "target": "morph:mouthOpen",     "interp": "linear", "keys": [[0.0, 0.0], [1.5, 1.0], [3.0, 0.0]] },
+    { "target": "joint:head/rotation", "interp": "linear", "keys": [[0.0, [0,0,0,1]], [1.5, [0,0.2,0,0.98]]] },
+    { "target": "joint:neck/translation", "keys": [...] },
+    { "target": "node:root/translation",  "keys": [...] }
+  ]
+}
+```
+
+Prefix convention (`morph:` / `joint:<name>/<channel>` / `node:<name>/<channel>`) keeps the format trivially extensible without schema versioning.
+
+**Why an adapter pattern (not just one parser):** the production JSON may bake keys as `[{"t": 0.5, "v": 0.3}]`, flatten everything into per-parameter rows, reference parameters by numeric ID, or use a different time base. An adapter isolates that guesswork. When the real schema arrives, we write one `ProductionAnimationJsonAdapter` class; the IR, sampler, and renderer stay untouched.
+
+---
+
+### Step 4: Hook Animation onto a `Mesh`
+
+**Modify** `ext/Vulkan-Engine/include/engine/core/mesh.h`
+
+Add:
+```cpp
+std::unique_ptr<Animation>     m_animation;   // owned timeline
+AnimationPose                  m_pose;        // per-frame sampled output
+float                          m_localTime = 0.0f;
+bool                           m_animPaused = false;
+
+void set_animation(std::unique_ptr<Animation> anim);
+void advance_animation(float dtSeconds);   // called once per frame from the scene tick
+const AnimationPose& get_pose() const;
+```
+
+`advance_animation` samples the timeline and updates `m_pose`. The Mesh holds the pose; the renderer pulls from it.
+
+**Modify** `src/application.cpp` — after each GLB character is added, optionally attach an animation:
+```cpp
+auto anim = Tools::Loaders::load_animation_json(
+    RESOURCES_PATH "animations/alex_demo.json",
+    *character0->get_geometries()[0]->get_properties().skinData,
+    *character0->get_geometries()[0]->get_properties().morphTargetData);
+character0->set_animation(std::make_unique<Animation>(std::move(anim)));
+```
+Tick advances each animated mesh in `HairViewer::tick()`.
+
+---
+
+### Step 5: GPU Consumption
+
+This is the minimum surface that has to land in the renderer for the animation to be visible. Two paths, can be done in order:
+
+**5a — Morph target weights (simpler, visible first).**
+- Store morph target POSITION deltas as an SSBO (`vec4` per vertex per target, or packed).
+- Add a uniform/SSBO of `float weights[MAX_MORPH_TARGETS]` (size 100).
+- In the PBR vertex shader (or a new skinned variant): `pos += Σ weights[i] * delta[i]`.
+- Descriptor set additions for the PBR pass: one storage buffer (deltas) + one uniform/storage buffer (weights).
+
+**5b — Skeletal skinning.**
+- Store `SkinData.jointIndices` and `jointWeights` as SSBOs.
+- Per-frame upload `mat4 jointMatrices[MAX_JOINTS]` (size 64 safe).
+- Vertex shader adds `skinnedPos = Σ weights[k] * jointMatrices[indices[k]] * pos`.
+- Bind pose comes from `SkinData.inverseBindMatrices` × `AnimationPose::jointMatrices`.
+
+Both paths reuse existing descriptor set slots — the PBR pass gets one new descriptor set (call it `SKIN_LAYOUT`) bound only when the mesh has skin/morph data. Non-skinned meshes keep their current pipeline.
+
+**Compute-shader alternative** (not chosen for v1): run skinning/morphing in a compute pass that writes into a transient vertex buffer before the forward pass. Worth revisiting only if per-mesh-instance cost becomes a problem.
+
+---
+
+### Step 6: Validate
+
+1. **Build**: `cmake --build .` — verify no new validation errors in the 10-frame headless run.
+2. **Static pose test**: load a JSON with a single keyframe (t=0, morph weight 1.0 on `jawOpen`). Confirm the face deforms.
+3. **Timeline test**: 3-second looping JSON. Confirm smooth interpolation at 60 fps.
+4. **Skeletal test**: rotate one joint (e.g. `head`) over 2 s. Confirm the head rotates without detaching from the neck.
+5. **Schema-swap test**: write a second JSON in a deliberately different shape, supply a second adapter, confirm the IR/renderer path is unchanged.
+
+---
+
+### Files Summary
+
+| Action | File | Purpose |
+|--------|------|---------|
+| Modify | `ext/Vulkan-Engine/src/tools/loaders.cpp` + `.h` | Add `inspect_GLB()` debug utility |
+| Modify | `src/main.cpp` | `--inspect-glb <path>` CLI flag |
+| Create | `ext/Vulkan-Engine/include/engine/core/animation.h` | IR: `Animation`, `Track`, `Keyframe`, `AnimationPose` |
+| Create | `ext/Vulkan-Engine/src/core/animation.cpp` | Timeline sampling / interpolation |
+| Create | `ext/Vulkan-Engine/include/engine/core/animation_json.h` + `.cpp` | `IAnimationJsonAdapter` + default adapter |
+| Modify | `ext/Vulkan-Engine/include/engine/core/mesh.h` + `.cpp` | `set_animation`, `advance_animation`, pose storage |
+| Modify | `ext/Vulkan-Engine/src/systems/renderers/forward.cpp` (+ PBR pass shaders) | Upload weights / joint matrices, consume in vertex shader |
+| Create | `resources/animations/<char>_demo.json` | One sample timeline per character for testing |
+| Modify | `src/application.cpp` | Attach demo animations to GLB meshes |
+
+CMake picks up new files via `GLOB_RECURSE`. nlohmann/json is already in `thirdparty/` (bundled with tinygltf).
+
+---
+
+### Risks & Notes
+
+- **Unknown production schema.** The adapter pattern is the mitigation; resist the urge to pre-design for formats we haven't seen. When the schema arrives, write a new adapter in a single file.
+- **Joint-name collisions.** If two joints share a name (rare but possible in mirrored rigs), switch the lookup to node-index-keyed tracks. The IR's `targetName` string is easy to swap for an integer without touching adapters.
+- **Additive vs override morphs.** glTF morphs are additive by convention; our default sampler must accumulate weights, not replace.
+- **Bind-pose sanity.** The TRS of every joint node must be captured at load time. If a JSON track omits a channel, we fall back to bind pose — do not assume identity.
+- **Quaternion interpolation.** Use `slerp` for rotations, not per-component linear, to avoid the classic flipping artifact.
+- **Time units.** Keep the IR in seconds; let adapters convert from frames/ms. Any ambiguity lives at the adapter boundary.
+- **Memory.** 100 morph targets × ~40K verts × 12 bytes ≈ 48 MB per character for deltas as a dense SSBO. Acceptable for 1–4 characters; if we scale up, compress or store only non-zero deltas (sparse).
+
+---

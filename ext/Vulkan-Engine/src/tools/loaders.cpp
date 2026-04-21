@@ -1,3 +1,4 @@
+#include <fstream>
 #include <stb_image.h>                  // declarations — implementation lives in the engine's stb_image library
 
 #define TINYGLTF_IMPLEMENTATION
@@ -621,6 +622,137 @@ void VKFW::Tools::Loaders::load_GLB(Core::Mesh* const mesh, const std::string fi
     }
 
     mesh->set_file_route(fileName);
+}
+
+void VKFW::Tools::Loaders::inspect_GLB(const std::string fileName) {
+    tinygltf::Model    model;
+    tinygltf::TinyGLTF loader;
+    std::string        err, warn;
+
+    bool ok = loader.LoadBinaryFromFile(&model, &err, &warn, fileName);
+    if (!ok)
+    {
+        std::cerr << "inspect_GLB: failed to load " << fileName << "\n";
+        if (!err.empty())
+            std::cerr << "  error: " << err << "\n";
+        return;
+    }
+
+    std::string  outPath = fileName + ".params.txt";
+    std::ofstream out(outPath);
+    if (!out)
+    {
+        std::cerr << "inspect_GLB: cannot write " << outPath << "\n";
+        return;
+    }
+
+    out << "=== GLB INSPECTION: " << fileName << " ===\n\n";
+
+    // --- Nodes ---
+    out << "NODES (" << model.nodes.size() << "):\n";
+    for (int i = 0; i < (int)model.nodes.size(); ++i)
+    {
+        const auto& n = model.nodes[i];
+        out << "  [" << i << "] \"" << n.name << "\"";
+        if (n.mesh >= 0)
+            out << "  mesh=" << n.mesh;
+        if (n.skin >= 0)
+            out << "  skin=" << n.skin;
+        if (!n.children.empty())
+        {
+            out << "  children=[";
+            for (int c : n.children)
+                out << c << ",";
+            out << "]";
+        }
+        if (!n.translation.empty())
+            out << "  T=(" << n.translation[0] << "," << n.translation[1] << "," << n.translation[2] << ")";
+        if (!n.rotation.empty())
+            out << "  R=(" << n.rotation[0] << "," << n.rotation[1] << "," << n.rotation[2] << "," << n.rotation[3] << ")";
+        out << "\n";
+    }
+
+    // --- Skins ---
+    out << "\nSKINS (" << model.skins.size() << "):\n";
+    for (int si = 0; si < (int)model.skins.size(); ++si)
+    {
+        const auto& skin = model.skins[si];
+        out << "  Skin[" << si << "] \"" << skin.name << "\"  joints=" << skin.joints.size() << "\n";
+        for (int ji = 0; ji < (int)skin.joints.size(); ++ji)
+        {
+            int nodeIdx = skin.joints[ji];
+            std::string jName = (nodeIdx < (int)model.nodes.size()) ? model.nodes[nodeIdx].name : "<unknown>";
+            out << "    joint[" << ji << "] node=" << nodeIdx << " \"" << jName << "\"\n";
+        }
+    }
+
+    // --- Meshes + Morph Targets ---
+    out << "\nMESHES (" << model.meshes.size() << "):\n";
+    for (int mi = 0; mi < (int)model.meshes.size(); ++mi)
+    {
+        const auto& mesh = model.meshes[mi];
+        out << "  Mesh[" << mi << "] \"" << mesh.name << "\"  primitives=" << mesh.primitives.size() << "\n";
+
+        // morph target names from extras
+        if (mesh.extras.IsObject() && mesh.extras.Has("targetNames"))
+        {
+            const auto& arr = mesh.extras.Get("targetNames");
+            if (arr.IsArray())
+            {
+                out << "    targetNames (" << arr.ArrayLen() << "):\n";
+                for (int ti = 0; ti < (int)arr.ArrayLen(); ++ti)
+                    out << "      [" << ti << "] \"" << arr.Get(ti).Get<std::string>() << "\"\n";
+            }
+        }
+
+        for (int pi = 0; pi < (int)mesh.primitives.size(); ++pi)
+        {
+            const auto& prim = mesh.primitives[pi];
+            out << "    Primitive[" << pi << "]  morphTargets=" << prim.targets.size() << "\n";
+            out << "      attributes:";
+            for (const auto& kv : prim.attributes)
+                out << " " << kv.first;
+            out << "\n";
+        }
+    }
+
+    // --- Animations ---
+    out << "\nANIMATIONS (" << model.animations.size() << "):\n";
+    for (int ai = 0; ai < (int)model.animations.size(); ++ai)
+    {
+        const auto& anim = model.animations[ai];
+        out << "  Animation[" << ai << "] \"" << anim.name << "\"  channels=" << anim.channels.size()
+            << "  samplers=" << anim.samplers.size() << "\n";
+
+        // print samplers (time range)
+        for (int si = 0; si < (int)anim.samplers.size(); ++si)
+        {
+            const auto& samp = anim.samplers[si];
+            std::string interp = samp.interpolation.empty() ? "LINEAR" : samp.interpolation;
+            // time range from input accessor
+            const auto& timeAcc = model.accessors[samp.input];
+            out << "    Sampler[" << si << "]  interp=" << interp
+                << "  keys=" << timeAcc.count
+                << "  tMin=" << timeAcc.minValues[0] << "  tMax=" << timeAcc.maxValues[0] << "\n";
+        }
+
+        // print channels
+        for (int ci = 0; ci < (int)anim.channels.size(); ++ci)
+        {
+            const auto& ch = anim.channels[ci];
+            std::string targetName = (ch.target_node >= 0 && ch.target_node < (int)model.nodes.size())
+                                         ? model.nodes[ch.target_node].name
+                                         : "<node" + std::to_string(ch.target_node) + ">";
+            out << "    Channel[" << ci << "]  node=" << ch.target_node
+                << " \"" << targetName << "\""
+                << "  path=" << ch.target_path
+                << "  sampler=" << ch.sampler << "\n";
+        }
+    }
+
+    out << "\n=== END ===\n";
+    out.close();
+    std::cout << "inspect_GLB: wrote " << outPath << "\n";
 }
 
 void VKFW::Tools::Loaders::load_3D_file(Core::Mesh* const mesh, const std::string fileName, bool asynCall, bool overrideGeometry) {

@@ -1,4 +1,5 @@
 #include "application.h"
+#include <engine/tools/loaders.h>
 #include <iostream>
 
 int main(int argc, char* argv[]) {
@@ -16,6 +17,28 @@ int main(int argc, char* argv[]) {
         int         maxFrames{0};
         LogLevel    logLevel{LogLevel::Warn};
         std::string logFile{};
+
+        // Quick-exit inspection mode: --inspect-glb <path> [<path2> ...]
+        for (int i = 1; i < argc; ++i)
+        {
+            std::string token(argv[i]);
+            if (token == "--inspect-glb")
+            {
+                bool any = false;
+                while (i + 1 < argc && argv[i + 1][0] != '-')
+                {
+                    ++i;
+                    VKFW::Tools::Loaders::inspect_GLB(argv[i]);
+                    any = true;
+                }
+                if (!any)
+                {
+                    std::cerr << "\"--inspect-glb\" expects one or more GLB file paths\n";
+                    return EXIT_FAILURE;
+                }
+                return EXIT_SUCCESS;
+            }
+        }
 
         if (argc == 1)
             std::cout << "No arguments submitted, initializing with default parameters..." << std::endl;

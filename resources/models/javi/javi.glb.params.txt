@@ -1,0 +1,247 @@
+=== GLB INSPECTION: ../../resources/models/javi/javi.glb ===
+
+NODES (61):
+  [0] "javi_nCnH"  mesh=0  skin=0
+  [1] "pelvis"  children=[2,3,4,]  T=(0.00276259,1.03081,0.00294695)
+  [2] "left_hip"  children=[5,]  T=(0.0587898,-0.0950873,-0.0310811)
+  [3] "right_hip"  children=[6,]  T=(-0.0639514,-0.107481,-0.0244263)
+  [4] "spine1"  children=[7,]  T=(-0.00323052,0.109683,-0.022478)
+  [5] "left_knee"  children=[8,]  T=(0.0724434,-0.414037,-0.00549109)
+  [6] "right_knee"  children=[9,]  T=(-0.0602255,-0.395659,-0.0148483)
+  [7] "spine2"  children=[10,]  T=(0.0102133,0.131597,0.000524387)
+  [8] "left_ankle"  children=[11,]  T=(-0.0500017,-0.436941,-0.0370271)
+  [9] "right_ankle"  children=[12,]  T=(0.0182751,-0.4459,-0.0242943)
+  [10] "spine3"  children=[13,14,15,]  T=(-0.0115161,0.0610591,0.025849)
+  [11] "left_foot"  T=(0.0538646,-0.065482,0.128149)
+  [12] "right_foot"  T=(-0.0434296,-0.0653539,0.128816)
+  [13] "neck"  children=[16,]  T=(-0.0125407,0.16845,-0.00589032)
+  [14] "left_collar"  children=[17,]  T=(0.0490029,0.0877631,0.00608891)
+  [15] "right_collar"  children=[18,]  T=(-0.0498586,0.0860862,-0.00170032)
+  [16] "head"  children=[23,24,25,]  T=(0.0268229,0.181574,0.0383594)
+  [17] "left_shoulder"  children=[19,]  T=(0.135659,0.0568089,-0.0228364)
+  [18] "right_shoulder"  children=[20,]  T=(-0.118632,0.0538254,-0.018247)
+  [19] "left_elbow"  children=[21,]  T=(0.271609,-0.0752268,-0.0492407)
+  [20] "right_elbow"  children=[22,]  T=(-0.290011,-0.0361743,-0.0340534)
+  [21] "left_wrist"  children=[26,29,32,35,38,]  T=(0.274221,0.0240378,8.58605e-05)
+  [22] "right_wrist"  children=[41,44,47,50,53,]  T=(-0.270484,-0.00721538,-0.0127629)
+  [23] "jaw"  T=(-0.0181318,-0.000801206,-0.00546384)
+  [24] "left_eye"  T=(0.0214201,0.0538261,0.0652372)
+  [25] "right_eye"  T=(-0.0464659,0.0538257,0.0652359)
+  [26] "left_index1"  children=[27,]  T=(0.111323,-0.0109283,0.0192039)
+  [27] "left_index2"  children=[28,]  T=(0.032488,-0.0115585,0.00099729)
+  [28] "left_index3"  T=(0.00692594,-0.0229635,-0.00288296)
+  [29] "left_middle1"  children=[30,]  T=(0.119886,-0.0083673,-0.00621609)
+  [30] "left_middle2"  children=[31,]  T=(0.0281341,-0.0162663,-0.00482188)
+  [31] "left_middle3"  T=(0.00516498,-0.0248379,-0.00208459)
+  [32] "left_pinky1"  children=[33,]  T=(0.0930619,-0.0159103,-0.0497036)
+  [33] "left_pinky2"  children=[34,]  T=(0.0135044,-0.0157728,-0.00518048)
+  [34] "left_pinky3"  T=(0.00413048,-0.0202657,0.000712976)
+  [35] "left_ring1"  children=[36,]  T=(0.107437,-0.0109055,-0.0318566)
+  [36] "left_ring2"  children=[37,]  T=(0.0254395,-0.0174578,-0.00188069)
+  [37] "left_ring3"  T=(0.00444126,-0.0251573,0.00108068)
+  [38] "left_thumb1"  children=[39,]  T=(0.0444968,-0.021958,0.0273178)
+  [39] "left_thumb2"  children=[40,]  T=(0.0230441,-0.0192028,0.0130096)
+  [40] "left_thumb3"  T=(0.0258622,-0.00914168,0.00717111)
+  [41] "right_index1"  children=[42,]  T=(-0.109312,-0.0140657,0.0200672)
+  [42] "right_index2"  children=[43,]  T=(-0.0324873,-0.0115585,0.000997834)
+  [43] "right_index3"  T=(-0.00692666,-0.0229628,-0.00288221)
+  [44] "right_middle1"  children=[45,]  T=(-0.117875,-0.0115045,-0.00535567)
+  [45] "right_middle2"  children=[46,]  T=(-0.0281339,-0.0162659,-0.00482196)
+  [46] "right_middle3"  T=(-0.00516427,-0.0248383,-0.00208455)
+  [47] "right_pinky1"  children=[48,]  T=(-0.0910499,-0.0190494,-0.048845)
+  [48] "right_pinky2"  children=[49,]  T=(-0.0135045,-0.0157728,-0.00517949)
+  [49] "right_pinky3"  T=(-0.00413072,-0.0202653,0.000713959)
+  [50] "right_ring1"  children=[51,]  T=(-0.105425,-0.0140438,-0.0309987)
+  [51] "right_ring2"  children=[52,]  T=(-0.0254394,-0.0174575,-0.00188048)
+  [52] "right_ring3"  T=(-0.00444114,-0.0251572,0.00108258)
+  [53] "right_thumb1"  children=[54,]  T=(-0.0424838,-0.0250999,0.0281826)
+  [54] "right_thumb2"  children=[55,]  T=(-0.0230438,-0.0192013,0.0130098)
+  [55] "right_thumb3"  T=(-0.0258633,-0.00913846,0.00717015)
+  [56] "HearingAid_Base"  mesh=1  skin=0
+  [57] "HearingAid_Goma"  mesh=2  skin=0
+  [58] "Teeth_Upper"  mesh=3  skin=0
+  [59] "Teeth_Lower"  mesh=4  skin=0
+  [60] "Tongue"  mesh=5  skin=0
+
+SKINS (1):
+  Skin[0] "javi_nCnH_Armature"  joints=55
+    joint[0] node=1 "pelvis"
+    joint[1] node=2 "left_hip"
+    joint[2] node=3 "right_hip"
+    joint[3] node=4 "spine1"
+    joint[4] node=5 "left_knee"
+    joint[5] node=6 "right_knee"
+    joint[6] node=7 "spine2"
+    joint[7] node=8 "left_ankle"
+    joint[8] node=9 "right_ankle"
+    joint[9] node=10 "spine3"
+    joint[10] node=11 "left_foot"
+    joint[11] node=12 "right_foot"
+    joint[12] node=13 "neck"
+    joint[13] node=14 "left_collar"
+    joint[14] node=15 "right_collar"
+    joint[15] node=16 "head"
+    joint[16] node=17 "left_shoulder"
+    joint[17] node=18 "right_shoulder"
+    joint[18] node=19 "left_elbow"
+    joint[19] node=20 "right_elbow"
+    joint[20] node=21 "left_wrist"
+    joint[21] node=22 "right_wrist"
+    joint[22] node=23 "jaw"
+    joint[23] node=24 "left_eye"
+    joint[24] node=25 "right_eye"
+    joint[25] node=26 "left_index1"
+    joint[26] node=27 "left_index2"
+    joint[27] node=28 "left_index3"
+    joint[28] node=29 "left_middle1"
+    joint[29] node=30 "left_middle2"
+    joint[30] node=31 "left_middle3"
+    joint[31] node=32 "left_pinky1"
+    joint[32] node=33 "left_pinky2"
+    joint[33] node=34 "left_pinky3"
+    joint[34] node=35 "left_ring1"
+    joint[35] node=36 "left_ring2"
+    joint[36] node=37 "left_ring3"
+    joint[37] node=38 "left_thumb1"
+    joint[38] node=39 "left_thumb2"
+    joint[39] node=40 "left_thumb3"
+    joint[40] node=41 "right_index1"
+    joint[41] node=42 "right_index2"
+    joint[42] node=43 "right_index3"
+    joint[43] node=44 "right_middle1"
+    joint[44] node=45 "right_middle2"
+    joint[45] node=46 "right_middle3"
+    joint[46] node=47 "right_pinky1"
+    joint[47] node=48 "right_pinky2"
+    joint[48] node=49 "right_pinky3"
+    joint[49] node=50 "right_ring1"
+    joint[50] node=51 "right_ring2"
+    joint[51] node=52 "right_ring3"
+    joint[52] node=53 "right_thumb1"
+    joint[53] node=54 "right_thumb2"
+    joint[54] node=55 "right_thumb3"
+
+MESHES (6):
+  Mesh[0] "javi_nCnH_Mesh"  primitives=1
+    targetNames (100):
+      [0] "Exp_000"
+      [1] "Exp_001"
+      [2] "Exp_002"
+      [3] "Exp_003"
+      [4] "Exp_004"
+      [5] "Exp_005"
+      [6] "Exp_006"
+      [7] "Exp_007"
+      [8] "Exp_008"
+      [9] "Exp_009"
+      [10] "Exp_010"
+      [11] "Exp_011"
+      [12] "Exp_012"
+      [13] "Exp_013"
+      [14] "Exp_014"
+      [15] "Exp_015"
+      [16] "Exp_016"
+      [17] "Exp_017"
+      [18] "Exp_018"
+      [19] "Exp_019"
+      [20] "Exp_020"
+      [21] "Exp_021"
+      [22] "Exp_022"
+      [23] "Exp_023"
+      [24] "Exp_024"
+      [25] "Exp_025"
+      [26] "Exp_026"
+      [27] "Exp_027"
+      [28] "Exp_028"
+      [29] "Exp_029"
+      [30] "Exp_030"
+      [31] "Exp_031"
+      [32] "Exp_032"
+      [33] "Exp_033"
+      [34] "Exp_034"
+      [35] "Exp_035"
+      [36] "Exp_036"
+      [37] "Exp_037"
+      [38] "Exp_038"
+      [39] "Exp_039"
+      [40] "Exp_040"
+      [41] "Exp_041"
+      [42] "Exp_042"
+      [43] "Exp_043"
+      [44] "Exp_044"
+      [45] "Exp_045"
+      [46] "Exp_046"
+      [47] "Exp_047"
+      [48] "Exp_048"
+      [49] "Exp_049"
+      [50] "Exp_050"
+      [51] "Exp_051"
+      [52] "Exp_052"
+      [53] "Exp_053"
+      [54] "Exp_054"
+      [55] "Exp_055"
+      [56] "Exp_056"
+      [57] "Exp_057"
+      [58] "Exp_058"
+      [59] "Exp_059"
+      [60] "Exp_060"
+      [61] "Exp_061"
+      [62] "Exp_062"
+      [63] "Exp_063"
+      [64] "Exp_064"
+      [65] "Exp_065"
+      [66] "Exp_066"
+      [67] "Exp_067"
+      [68] "Exp_068"
+      [69] "Exp_069"
+      [70] "Exp_070"
+      [71] "Exp_071"
+      [72] "Exp_072"
+      [73] "Exp_073"
+      [74] "Exp_074"
+      [75] "Exp_075"
+      [76] "Exp_076"
+      [77] "Exp_077"
+      [78] "Exp_078"
+      [79] "Exp_079"
+      [80] "Exp_080"
+      [81] "Exp_081"
+      [82] "Exp_082"
+      [83] "Exp_083"
+      [84] "Exp_084"
+      [85] "Exp_085"
+      [86] "Exp_086"
+      [87] "Exp_087"
+      [88] "Exp_088"
+      [89] "Exp_089"
+      [90] "Exp_090"
+      [91] "Exp_091"
+      [92] "Exp_092"
+      [93] "Exp_093"
+      [94] "Exp_094"
+      [95] "Exp_095"
+      [96] "Exp_096"
+      [97] "Exp_097"
+      [98] "Exp_098"
+      [99] "Exp_099"
+    Primitive[0]  morphTargets=100
+      attributes: JOINTS_0 NORMAL POSITION TEXCOORD_0 WEIGHTS_0
+  Mesh[1] "HearingAid_Base_Mesh"  primitives=1
+    Primitive[0]  morphTargets=0
+      attributes: JOINTS_0 POSITION WEIGHTS_0
+  Mesh[2] "HearingAid_Goma_Mesh"  primitives=1
+    Primitive[0]  morphTargets=0
+      attributes: JOINTS_0 POSITION WEIGHTS_0
+  Mesh[3] "Teeth_Upper_Mesh"  primitives=1
+    Primitive[0]  morphTargets=0
+      attributes: JOINTS_0 POSITION WEIGHTS_0
+  Mesh[4] "Teeth_Lower_Mesh"  primitives=1
+    Primitive[0]  morphTargets=0
+      attributes: JOINTS_0 POSITION WEIGHTS_0
+  Mesh[5] "Tongue_Mesh"  primitives=1
+    Primitive[0]  morphTargets=0
+      attributes: JOINTS_0 POSITION WEIGHTS_0
+
+ANIMATIONS (0):
+
+=== END ===

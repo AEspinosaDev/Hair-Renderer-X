@@ -80,6 +80,27 @@ Geometry* Geometry::create_cube() {
 
     return g;
 }
+void Geometry::apply_morphs(const std::vector<float>& weights) {
+    if (!m_properties.morphTargetData.has_value()) return;
+    if (!m_VAO.loadedOnGPU) return;
+
+    const auto& morphData = *m_properties.morphTargetData;
+    const size_t numVerts   = m_properties.vertexData.size();
+    const size_t numTargets = std::min(weights.size(), morphData.targets.size());
+
+    std::vector<Graphics::Vertex> morphed = m_properties.vertexData;
+    for (size_t t = 0; t < numTargets; ++t) {
+        const float w = weights[t];
+        if (std::abs(w) < 1e-6f) continue;
+        const auto& target = morphData.targets[t];
+        const size_t dcount = std::min(numVerts, target.deltaPos.size());
+        for (size_t v = 0; v < dcount; ++v)
+            morphed[v].pos += target.deltaPos[v] * w;
+    }
+
+    m_VAO.vbo.upload_data(morphed.data(), numVerts * sizeof(Graphics::Vertex));
+}
+
 Graphics::VertexArrays* const get_VAO(Geometry* g) {
     return &g->m_VAO;
 }

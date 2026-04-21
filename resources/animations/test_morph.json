@@ -1,0 +1,30 @@
+{
+  "name": "test_morph",
+  "duration": 4.0,
+  "fps": 30,
+  "loop": true,
+  "tracks": [
+    {
+      "target": "morph:Exp_000",
+      "interp": "linear",
+      "keys": [
+        [0.0, 0.0],
+        [1.0, 1.0],
+        [2.0, 0.0],
+        [3.0, 0.0],
+        [4.0, 0.0]
+      ]
+    },
+    {
+      "target": "morph:Exp_001",
+      "interp": "linear",
+      "keys": [
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [2.0, 0.0],
+        [3.0, 1.0],
+        [4.0, 0.0]
+      ]
+    }
+  ]
+}

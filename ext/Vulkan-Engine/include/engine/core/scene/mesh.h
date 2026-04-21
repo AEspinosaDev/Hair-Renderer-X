@@ -13,6 +13,8 @@
 #include <engine/core/materials/material.h>
 #include <engine/core/scene/camera.h>
 #include <engine/core/scene/object3D.h>
+#include <engine/core/animation.h>
+#include <memory>
 
 VULKAN_ENGINE_NAMESPACE_BEGIN
 
@@ -96,6 +98,11 @@ class Mesh : public Object3D
     bool        m_receiveShadows = true;
     bool        m_rayHittable    = true;
     std::string m_fileRoute      = "None";
+
+    std::unique_ptr<Animation> m_animation;
+    AnimationPose              m_pose;
+    float                      m_localTime  = 0.0f;
+    bool                       m_animPaused = false;
 
     static IMaterial* m_debugMaterial;
     static int        m_instanceCount;
@@ -245,6 +252,13 @@ class Mesh : public Object3D
     inline void set_material_ID(size_t geometrySlot, size_t materialSlot) {
         m_geometry[geometrySlot]->set_material_ID(materialSlot);
     }
+
+    void set_animation(std::unique_ptr<Animation> anim);
+    void advance_animation(float dtSeconds);
+    inline const AnimationPose& get_pose() const { return m_pose; }
+    inline bool has_animation() const { return m_animation != nullptr; }
+    inline void set_anim_paused(bool p) { m_animPaused = p; }
+    inline bool is_anim_paused() const { return m_animPaused; }
 
     Mesh* clone() const;
 };

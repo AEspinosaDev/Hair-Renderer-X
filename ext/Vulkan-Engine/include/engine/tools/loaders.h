@@ -88,6 +88,12 @@ void load_3D_texture(Core::ITexture* const texture,
 
 void compute_tangents_gram_smidt(std::vector<Graphics::Vertex>& vertices, const std::vector<uint32_t>& indices);
 
+/*
+Inspect a GLB file and write a human-readable parameter dump to <fileName>.params.txt.
+Reports: mesh names, morph target names, skin joints, node names, animation channels.
+*/
+void inspect_GLB(const std::string fileName);
+
 }; // namespace Tools::Loaders
 
 VULKAN_ENGINE_NAMESPACE_END

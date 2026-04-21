@@ -136,6 +136,8 @@ class Geometry
     void             fill(std::vector<Graphics::Vertex> vertexInfo, std::vector<uint32_t> vertexIndex);
     void             fill(Vec3* pos, Vec3* normal, Vec2* uv, Vec3* tangent, uint32_t vertNumber);
     void             fill_voxel_array(std::vector<Graphics::Voxel> voxels);
+    // Apply morph target weights to the VBO. VBO must have been created as animatable (CPU_TO_GPU).
+    void             apply_morphs(const std::vector<float>& weights);
     static Geometry* create_quad();
     static Geometry* create_cube();
 };

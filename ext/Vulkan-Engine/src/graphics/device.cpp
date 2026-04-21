@@ -461,28 +461,37 @@ void Device::upload_vertex_arrays(VertexArrays& vao,
                                   size_t        posSize,
                                   const void*   posData,
                                   size_t        voxelSize,
-                                  const void*   voxelData) {
+                                  const void*   voxelData,
+                                  bool          animatableVBO) {
     PROFILING_EVENT()
     // Should be executed only once if geometry data is not changed
 
-    Buffer vboStagingBuffer = create_buffer_VMA(vboSize, BUFFER_USAGE_TRANSFER_SRC, VMA_MEMORY_USAGE_CPU_ONLY);
-    vboStagingBuffer.upload_data(vboData, vboSize);
+    if (animatableVBO) {
+        // Host-visible VBO: per-frame CPU writes via upload_data(), no staging needed.
+        vao.vbo = create_buffer_VMA(vboSize,
+                                    BUFFER_USAGE_VERTEX_BUFFER | BUFFER_USAGE_SHADER_DEVICE_ADDRESS | BUFFER_USAGE_STORAGE_BUFFER,
+                                    VMA_MEMORY_USAGE_CPU_TO_GPU);
+        vao.vbo.upload_data(vboData, vboSize);
+    } else {
+        Buffer vboStagingBuffer = create_buffer_VMA(vboSize, BUFFER_USAGE_TRANSFER_SRC, VMA_MEMORY_USAGE_CPU_ONLY);
+        vboStagingBuffer.upload_data(vboData, vboSize);
 
-    // GPU vertex buffer
-    vao.vbo = create_buffer_VMA(vboSize,
-                                BUFFER_USAGE_VERTEX_BUFFER | BUFFER_USAGE_TRANSFER_DST | BUFFER_USAGE_SHADER_DEVICE_ADDRESS |
-                                    BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | BUFFER_USAGE_STORAGE_BUFFER,
-                                VMA_MEMORY_USAGE_GPU_ONLY);
+        // GPU vertex buffer
+        vao.vbo = create_buffer_VMA(vboSize,
+                                    BUFFER_USAGE_VERTEX_BUFFER | BUFFER_USAGE_TRANSFER_DST | BUFFER_USAGE_SHADER_DEVICE_ADDRESS |
+                                        BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY | BUFFER_USAGE_STORAGE_BUFFER,
+                                    VMA_MEMORY_USAGE_GPU_ONLY);
 
-    m_uploadContext.immediate_submit(m_handle, m_queues[QueueType::GRAPHIC_QUEUE], [&](VkCommandBuffer cmd) {
-        VkBufferCopy copy;
-        copy.dstOffset = 0;
-        copy.srcOffset = 0;
-        copy.size      = vboSize;
-        vkCmdCopyBuffer(cmd, vboStagingBuffer.handle, vao.vbo.handle, 1, &copy);
-    });
+        m_uploadContext.immediate_submit(m_handle, m_queues[QueueType::GRAPHIC_QUEUE], [&](VkCommandBuffer cmd) {
+            VkBufferCopy copy;
+            copy.dstOffset = 0;
+            copy.srcOffset = 0;
+            copy.size      = vboSize;
+            vkCmdCopyBuffer(cmd, vboStagingBuffer.handle, vao.vbo.handle, 1, &copy);
+        });
 
-    vboStagingBuffer.cleanup();
+        vboStagingBuffer.cleanup();
+    }
 
     if (vao.indexCount > 0)
     {

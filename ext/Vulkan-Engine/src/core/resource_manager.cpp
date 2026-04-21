@@ -365,13 +365,14 @@ void ResourceManager::upload_geometry_data(Graphics::Device* const device, Core:
             positions.push_back(Vec4(v.pos, 1.0));
         size_t positionsSize = sizeof(Vec4) * positions.size();
 
+        const bool animatable = gd.morphTargetData.has_value();
         device->upload_vertex_arrays(
-            *rd, vboSize, gd.vertexData.data(), iboSize, gd.vertexIndex.data(), positionsSize, positions.data(), voxelSize, gd.voxelData.data());
+            *rd, vboSize, gd.vertexData.data(), iboSize, gd.vertexIndex.data(), positionsSize, positions.data(), voxelSize, gd.voxelData.data(), animatable);
     }
     /*
-    ACCELERATION STRUCTURE
+    ACCELERATION STRUCTURE — skip for morph-animated meshes (VBO is CPU_TO_GPU, not BLAS-compatible).
     */
-    if (createAccelStructure)
+    if (createAccelStructure && !g->get_properties().morphTargetData.has_value())
     {
         Graphics::BLAS* accel = get_BLAS(g);
         if (!accel->handle)

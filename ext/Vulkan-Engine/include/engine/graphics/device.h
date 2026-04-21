@@ -164,10 +164,11 @@ class Device
                               const void*   vboData,
                               size_t        iboSize,
                               const void*   iboData,
-                              size_t        posSize = 0,
-                              const void*   posData = nullptr,
-                              size_t        voxelSize = 0,
-                              const void*   voxelData = nullptr);
+                              size_t        posSize       = 0,
+                              const void*   posData       = nullptr,
+                              size_t        voxelSize     = 0,
+                              const void*   voxelData     = nullptr,
+                              bool          animatableVBO = false);
     void upload_texture_image(Image&        img,
                               ImageConfig   config,
                               SamplerConfig samplerConfig,

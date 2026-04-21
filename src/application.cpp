@@ -92,6 +92,31 @@ void HairViewer::setup() {
     character0->set_name("Alex");
     m_scene->add(character0);
 
+    // Debug: list available morph targets so the test JSON can use real names.
+    if (Geometry* g = character0->get_geometry(0)) {
+        const auto& props = g->get_properties();
+        if (props.morphTargetData.has_value()) {
+            LOG_DEBUG("Alex morph targets:");
+            for (const auto& name : props.morphTargetData->targetNames)
+                LOG_DEBUG("  " + name);
+
+            // Load test animation — uses morph_0 / morph_1 as fallback names.
+            // Update test_morph.json with real names once you see the log above.
+            try {
+                static const SkinData        emptySkin;
+                const SkinData*        skin   = props.skinData.has_value() ? &*props.skinData : &emptySkin;
+                Animation anim = load_animation_json(
+                    RESOURCES_PATH "animations/test_morph.json",
+                    *skin,
+                    *props.morphTargetData);
+                character0->set_animation(std::make_unique<Animation>(std::move(anim)));
+                LOG_DEBUG("Test morph animation loaded for Alex.");
+            } catch (const std::exception& e) {
+                LOG_ERROR(std::string("Animation load failed: ") + e.what());
+            }
+        }
+    }
+
     Vec3 hairCards0_offset = Vec3{0.0f, 0.8f, 0.2f};
     Mesh* hairCards0 = new Mesh();
     Tools::Loaders::load_3D_file(hairCards0, MESH_PATH + "alex/hair_fauxmohawk.obj", false);
@@ -319,6 +344,9 @@ void HairViewer::setup() {
 void HairViewer::update() {
     if (!m_interface.overlay->wants_to_handle_input())
         m_controller->handle_keyboard(0, 0, m_time.delta);
+
+    for (Mesh* mesh : m_scene->get_meshes())
+        mesh->advance_animation(m_time.delta);
 
     // Rotate the vector around the ZX plane
     auto light = m_scene->get_lights()[0];

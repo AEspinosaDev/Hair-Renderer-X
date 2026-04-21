@@ -26,6 +26,9 @@
 #include <engine/core/materials/hair_disney.h>
 #include <engine/core/materials/hair_card.h>
 
+#include <engine/core/animation.h>
+#include <engine/core/animation_json.h>
+
 #include <engine/core/scene/object3D.h>
 #include <engine/core/scene/camera.h>
 #include <engine/core/scene/light.h>

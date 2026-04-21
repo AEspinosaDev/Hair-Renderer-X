@@ -80,6 +80,36 @@ IMaterial* Mesh::change_material(IMaterial* m, size_t id) {
     return old_m;
 }
 
+void Mesh::set_animation(std::unique_ptr<Animation> anim) {
+    m_animation = std::move(anim);
+    m_localTime = 0.0f;
+    m_pose      = {};
+}
+
+void Mesh::advance_animation(float dtSeconds) {
+    if (!m_animation || m_animPaused)
+        return;
+    m_localTime += dtSeconds;
+    static const SkinData        emptySkin;
+    static const MorphTargetData emptyMorphs;
+    const SkinData*        skin   = &emptySkin;
+    const MorphTargetData* morphs = &emptyMorphs;
+    for (auto* g : m_geometry) {
+        if (!g) continue;
+        const auto& props = g->get_properties();
+        if (props.skinData.has_value())        skin   = &*props.skinData;
+        if (props.morphTargetData.has_value()) morphs = &*props.morphTargetData;
+        break;
+    }
+    m_animation->sample(m_localTime, *skin, *morphs, m_pose);
+
+    if (!m_pose.morphWeights.empty()) {
+        for (auto* g : m_geometry) {
+            if (g) g->apply_morphs(m_pose.morphWeights);
+        }
+    }
+}
+
 Mesh* Mesh::clone() const {
     Mesh* mesh       = new Mesh();
     mesh->m_material = m_material;
