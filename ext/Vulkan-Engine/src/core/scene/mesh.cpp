@@ -103,10 +103,11 @@ void Mesh::advance_animation(float dtSeconds) {
     }
     m_animation->sample(m_localTime, *skin, *morphs, m_pose);
 
-    if (!m_pose.morphWeights.empty()) {
-        for (auto* g : m_geometry) {
-            if (g) g->apply_morphs(m_pose.morphWeights);
-        }
+    for (auto* g : m_geometry) {
+        if (!g) continue;
+        const auto& props = g->get_properties();
+        if (props.morphTargetData.has_value() || props.skinData.has_value())
+            g->apply_deformation(m_pose.morphWeights, m_pose.jointMatrices);
     }
 }
 

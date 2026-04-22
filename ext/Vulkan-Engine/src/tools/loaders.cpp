@@ -523,10 +523,12 @@ void VKFW::Tools::Loaders::load_GLB(Core::Mesh* const mesh, const std::string fi
                 for (size_t i = 0; i < vertCount; ++i)
                     sd.jointWeights[i] = {wPtr[4 * i], wPtr[4 * i + 1], wPtr[4 * i + 2], wPtr[4 * i + 3]};
 
-                // Inverse bind matrices + joint names from the first skin
+                // Inverse bind matrices, joint names, and parent indices from the first skin
                 if (!model.skins.empty())
                 {
                     const tinygltf::Skin& skin = model.skins[0];
+                    const int             numJoints = (int)skin.joints.size();
+
                     for (int ji : skin.joints)
                         sd.jointNames.push_back(ji < (int)model.nodes.size() ? model.nodes[ji].name : "");
 
@@ -537,6 +539,53 @@ void VKFW::Tools::Loaders::load_GLB(Core::Mesh* const mesh, const std::string fi
                         sd.inverseBindMatrices.resize(jointCount);
                         for (size_t j = 0; j < jointCount; ++j)
                             sd.inverseBindMatrices[j] = glm::make_mat4(ibmPtr + 16 * j);
+                    }
+
+                    // Bind-pose local TRS matrices from each joint's GLB node.
+                    // These are the rest-pose local transforms; animation overrides individual joints.
+                    sd.bindLocalMatrices.resize(numJoints, Mat4(1.0f));
+                    for (int ji = 0; ji < numJoints; ++ji) {
+                        int nodeIdx = skin.joints[ji];
+                        if (nodeIdx >= (int)model.nodes.size()) continue;
+                        const tinygltf::Node& node = model.nodes[nodeIdx];
+
+                        if (!node.matrix.empty()) {
+                            float m[16];
+                            for (int k = 0; k < 16; ++k) m[k] = (float)node.matrix[k];
+                            sd.bindLocalMatrices[ji] = glm::make_mat4(m);
+                        } else {
+                            glm::vec3 t = node.translation.size() == 3
+                                ? glm::vec3((float)node.translation[0], (float)node.translation[1], (float)node.translation[2])
+                                : glm::vec3(0.0f);
+                            glm::quat r = node.rotation.size() == 4
+                                ? glm::quat((float)node.rotation[3], (float)node.rotation[0], (float)node.rotation[1], (float)node.rotation[2])
+                                : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+                            glm::vec3 s = node.scale.size() == 3
+                                ? glm::vec3((float)node.scale[0], (float)node.scale[1], (float)node.scale[2])
+                                : glm::vec3(1.0f);
+                            sd.bindLocalMatrices[ji] = glm::translate(Mat4(1.0f), t) *
+                                                       glm::mat4_cast(r) *
+                                                       glm::scale(Mat4(1.0f), s);
+                        }
+                    }
+
+                    // Build parent index array: for each joint, -1 if it is the root.
+                    // Walk the node tree: when a node's child is a joint, that child's parent
+                    // is either the node itself (if it is also a joint) or -1.
+                    sd.parentIndices.assign(numJoints, -1);
+                    std::unordered_map<int, int> nodeToJoint;
+                    nodeToJoint.reserve(numJoints);
+                    for (int ji = 0; ji < numJoints; ++ji)
+                        nodeToJoint[skin.joints[ji]] = ji;
+
+                    for (int nodeIdx = 0; nodeIdx < (int)model.nodes.size(); ++nodeIdx) {
+                        auto parentIt = nodeToJoint.find(nodeIdx);
+                        int parentJoint = (parentIt != nodeToJoint.end()) ? parentIt->second : -1;
+                        for (int childNode : model.nodes[nodeIdx].children) {
+                            auto childIt = nodeToJoint.find(childNode);
+                            if (childIt != nodeToJoint.end())
+                                sd.parentIndices[childIt->second] = parentJoint;
+                        }
                     }
                 }
 

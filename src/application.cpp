@@ -92,28 +92,41 @@ void HairViewer::setup() {
     character0->set_name("Alex");
     m_scene->add(character0);
 
-    // Debug: list available morph targets so the test JSON can use real names.
+    // Debug: list morph targets and joints so test JSONs can use real names.
     if (Geometry* g = character0->get_geometry(0)) {
         const auto& props = g->get_properties();
+
         if (props.morphTargetData.has_value()) {
             LOG_DEBUG("Alex morph targets:");
             for (const auto& name : props.morphTargetData->targetNames)
-                LOG_DEBUG("  " + name);
+                LOG_DEBUG("  morph: " + name);
+        }
 
-            // Load test animation — uses morph_0 / morph_1 as fallback names.
-            // Update test_morph.json with real names once you see the log above.
-            try {
-                static const SkinData        emptySkin;
-                const SkinData*        skin   = props.skinData.has_value() ? &*props.skinData : &emptySkin;
-                Animation anim = load_animation_json(
-                    RESOURCES_PATH "animations/test_morph.json",
-                    *skin,
-                    *props.morphTargetData);
-                character0->set_animation(std::make_unique<Animation>(std::move(anim)));
-                LOG_DEBUG("Test morph animation loaded for Alex.");
-            } catch (const std::exception& e) {
-                LOG_ERROR(std::string("Animation load failed: ") + e.what());
+        if (props.skinData.has_value()) {
+            LOG_DEBUG("Alex joints:");
+            const auto& skin = *props.skinData;
+            for (size_t j = 0; j < skin.jointNames.size(); ++j) {
+                std::string parentName = (skin.parentIndices[j] >= 0)
+                    ? skin.jointNames[skin.parentIndices[j]]
+                    : "ROOT";
+                LOG_DEBUG("  joint[" + std::to_string(j) + "] " + skin.jointNames[j] +
+                          "  parent=" + parentName);
             }
+        }
+
+        // Load test animation (covers both morph targets and skeletal skinning).
+        try {
+            static const SkinData        emptySkin;
+            static const MorphTargetData emptyMorphs;
+            const SkinData*        skin   = props.skinData.has_value()       ? &*props.skinData       : &emptySkin;
+            const MorphTargetData* morphs = props.morphTargetData.has_value() ? &*props.morphTargetData : &emptyMorphs;
+            Animation anim = load_animation_json(
+                RESOURCES_PATH "animations/test_anim.json",
+                *skin, *morphs);
+            character0->set_animation(std::make_unique<Animation>(std::move(anim)));
+            LOG_DEBUG("Test animation loaded for Alex.");
+        } catch (const std::exception& e) {
+            LOG_ERROR(std::string("Animation load failed: ") + e.what());
         }
     }
 

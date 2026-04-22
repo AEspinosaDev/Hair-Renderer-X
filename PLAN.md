@@ -580,7 +580,7 @@ Prefix convention (`morph:` / `joint:<name>/<channel>` / `node:<name>/<channel>`
 
 ---
 
-### Step 4: Hook Animation onto a `Mesh`
+### Step 4: Hook Animation onto a `Mesh` [x]
 
 **Modify** `ext/Vulkan-Engine/include/engine/core/mesh.h`
 
@@ -610,35 +610,52 @@ Tick advances each animated mesh in `HairViewer::tick()`.
 
 ---
 
-### Step 5: GPU Consumption
+### Step 5: Mesh Deformation (CPU-side for MVP)
 
-This is the minimum surface that has to land in the renderer for the animation to be visible. Two paths, can be done in order:
+This is the minimum surface that has to land in the renderer for the animation to be visible. Two paths, done in order. For the MVP, **both use CPU-side deformation** (no GPU compute shaders or SSBOs) — morphed/skinned positions are recomputed on CPU each frame and uploaded via a host-visible (`VMA_MEMORY_USAGE_CPU_TO_GPU`) VBO.
 
-**5a — Morph target weights (simpler, visible first).**
-- Store morph target POSITION deltas as an SSBO (`vec4` per vertex per target, or packed).
-- Add a uniform/SSBO of `float weights[MAX_MORPH_TARGETS]` (size 100).
-- In the PBR vertex shader (or a new skinned variant): `pos += Σ weights[i] * delta[i]`.
-- Descriptor set additions for the PBR pass: one storage buffer (deltas) + one uniform/storage buffer (weights).
+**5a — Morph target deformation. [x] (CPU approach)**
 
-**5b — Skeletal skinning.**
-- Store `SkinData.jointIndices` and `jointWeights` as SSBOs.
-- Per-frame upload `mat4 jointMatrices[MAX_JOINTS]` (size 64 safe).
-- Vertex shader adds `skinnedPos = Σ weights[k] * jointMatrices[indices[k]] * pos`.
-- Bind pose comes from `SkinData.inverseBindMatrices` × `AnimationPose::jointMatrices`.
+Chosen approach: CPU-side blend of base vertex positions + weighted deltas, uploaded directly to GPU via a host-visible VBO each frame. No GPU SSBO or vertex shader changes needed.
 
-Both paths reuse existing descriptor set slots — the PBR pass gets one new descriptor set (call it `SKIN_LAYOUT`) bound only when the mesh has skin/morph data. Non-skinned meshes keep their current pipeline.
+Implementation summary:
+- `Device::upload_vertex_arrays` gains `bool animatableVBO = false` parameter. When true, VBO is allocated as `VMA_MEMORY_USAGE_CPU_TO_GPU` (directly mappable), skipping the staging-buffer path.
+- `Geometry::apply_morphs(const std::vector<float>& weights)` recomputes all vertex positions on CPU (`base + Σ weight[i] * deltaPos[i]`) and calls `vbo.upload_data()` directly.
+- `ResourceManager::upload_geometry_data` detects `morphTargetData` presence, passes `animatableVBO=true`, and skips BLAS creation for morph meshes (CPU_TO_GPU buffers lack the required acceleration structure flag).
+- `Mesh::advance_animation` calls `g->apply_morphs(m_pose.morphWeights)` after `sample()`.
+- `resources/animations/test_morph.json` created — 4-second loop cycling `Exp_000` (peak at t=1s) and `Exp_001` (peak at t=3s) using the real morph target names discovered at runtime.
+- Alex's 100 morph targets are named `Exp_000`–`Exp_099`.
 
-**Compute-shader alternative** (not chosen for v1): run skinning/morphing in a compute pass that writes into a transient vertex buffer before the forward pass. Worth revisiting only if per-mesh-instance cost becomes a problem.
+**5b — Skeletal skinning. [x] (CPU approach)**
+
+Chosen approach: same CPU-upload pattern as 5a — morph + skin in a single combined pass, one VBO upload per frame per mesh.
+
+Implementation summary:
+- `SkinData` gains `std::vector<int> parentIndices` (one per joint, -1 for roots). Parsed in `loaders.cpp` by walking the GLB node tree to find parent→child joint relationships.
+- `Geometry::apply_morphs` replaced by `Geometry::apply_deformation(morphWeights, jointMatrices)`. Applies morphs first, then walks the joint hierarchy (root-to-leaf, using `parentIndices`) to build world-space matrices, computes skinning matrices (`worldMat * inverseBindMat`), and applies 4-joint blend per vertex. Normals and tangents are also transformed via the inverse-transpose of the skinning matrix.
+- `Mesh::advance_animation` calls `apply_deformation` for any geometry that has morph or skin data.
+- `application.cpp` logs the full joint list with parent names on startup (mirrors morph target logging).
+- Alex's 55 joints are named `pelvis`, `spine1`–`spine3`, `neck`, `head`, `left/right_shoulder`, `left/right_elbow`, `left/right_wrist`, finger chains, etc.
+- `resources/animations/test_anim.json` combines morph (Exp_000, Exp_001) and skeletal (right_shoulder, right_elbow) tracks into one 4-second looping test animation.
+
+**GPU approach (deferred):** A compute shader writing into a transient vertex buffer before the forward pass is the cleaner long-term design. Not needed for MVP.
 
 ---
 
-### Step 6: Validate
+### Step 6: Validate [x]
 
 1. **Build**: `cmake --build .` — verify no new validation errors in the 10-frame headless run.
 2. **Static pose test**: load a JSON with a single keyframe (t=0, morph weight 1.0 on `jawOpen`). Confirm the face deforms.
 3. **Timeline test**: 3-second looping JSON. Confirm smooth interpolation at 60 fps.
 4. **Skeletal test**: rotate one joint (e.g. `head`) over 2 s. Confirm the head rotates without detaching from the neck.
 5. **Schema-swap test**: write a second JSON in a deliberately different shape, supply a second adapter, confirm the IR/renderer path is unchanged.
+
+**Validation results**:
+- Build: clean (MSVC Debug).
+- 10-frame headless run (`--frames 10 --log-level warn`): zero new Vulkan validation errors from animation code. Only pre-existing warnings (image layout / swapchain semaphore reuse) unchanged from prior runs.
+- Visual test (user-confirmed): `resources/animations/test_anim.json` combining 2 morph tracks (`Exp_000`, `Exp_001`) and 2 skeletal tracks (`right_shoulder`, `right_elbow` rotations) plays smoothly on Alex. Mouth opens/closes, shoulder rotates around the arm axis, all interpolation is smooth, character holds bind pose at rest (no mesh collapse).
+- Bind-pose initialization bug (character collapsing to a ball) was fixed in Step 5b by parsing `bindLocalMatrices` from GLB node TRS and resetting `AnimationPose::jointMatrices` to bind pose each frame in `sample()`.
+- Schema-swap test deferred until the production JSON schema is known — adapter interface (`IAnimationJsonAdapter`) is in place, ready for a new adapter class when needed.
 
 ---
 

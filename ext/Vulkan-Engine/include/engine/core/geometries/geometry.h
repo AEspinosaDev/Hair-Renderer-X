@@ -24,10 +24,12 @@ class Geometry;
 // Vertex struct so all existing VAO/pipeline code is untouched. Uploaded as
 // SSBOs when skeletal animation is implemented.
 struct SkinData {
-    std::vector<glm::uvec4> jointIndices;       // 4 joint indices per vertex
-    std::vector<Vec4>       jointWeights;       // 4 normalized weights per vertex
+    std::vector<glm::uvec4> jointIndices;        // 4 joint indices per vertex
+    std::vector<Vec4>       jointWeights;        // 4 normalized weights per vertex
     std::vector<Mat4>       inverseBindMatrices; // one per joint
-    std::vector<std::string> jointNames;        // for debugging
+    std::vector<Mat4>       bindLocalMatrices;   // bind-pose local TRS per joint (from GLB node)
+    std::vector<std::string> jointNames;         // for debugging
+    std::vector<int>        parentIndices;       // one per joint, -1 for roots
 };
 
 // Per-mesh morph target data. Stores only POSITION deltas (as exported from
@@ -136,8 +138,8 @@ class Geometry
     void             fill(std::vector<Graphics::Vertex> vertexInfo, std::vector<uint32_t> vertexIndex);
     void             fill(Vec3* pos, Vec3* normal, Vec2* uv, Vec3* tangent, uint32_t vertNumber);
     void             fill_voxel_array(std::vector<Graphics::Voxel> voxels);
-    // Apply morph target weights to the VBO. VBO must have been created as animatable (CPU_TO_GPU).
-    void             apply_morphs(const std::vector<float>& weights);
+    // Apply morph targets and/or skeletal skinning, then upload. VBO must be animatable (CPU_TO_GPU).
+    void             apply_deformation(const std::vector<float>& morphWeights, const std::vector<Mat4>& jointMatrices);
     static Geometry* create_quad();
     static Geometry* create_cube();
 };

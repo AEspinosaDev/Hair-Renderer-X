@@ -80,25 +80,76 @@ Geometry* Geometry::create_cube() {
 
     return g;
 }
-void Geometry::apply_morphs(const std::vector<float>& weights) {
-    if (!m_properties.morphTargetData.has_value()) return;
+void Geometry::apply_deformation(const std::vector<float>& morphWeights, const std::vector<Mat4>& jointMatrices) {
     if (!m_VAO.loadedOnGPU) return;
 
-    const auto& morphData = *m_properties.morphTargetData;
-    const size_t numVerts   = m_properties.vertexData.size();
-    const size_t numTargets = std::min(weights.size(), morphData.targets.size());
+    const size_t numVerts = m_properties.vertexData.size();
+    std::vector<Graphics::Vertex> deformed = m_properties.vertexData;
 
-    std::vector<Graphics::Vertex> morphed = m_properties.vertexData;
-    for (size_t t = 0; t < numTargets; ++t) {
-        const float w = weights[t];
-        if (std::abs(w) < 1e-6f) continue;
-        const auto& target = morphData.targets[t];
-        const size_t dcount = std::min(numVerts, target.deltaPos.size());
-        for (size_t v = 0; v < dcount; ++v)
-            morphed[v].pos += target.deltaPos[v] * w;
+    // --- Morph targets ---
+    if (m_properties.morphTargetData.has_value()) {
+        const auto& morphData   = *m_properties.morphTargetData;
+        const size_t numTargets = std::min(morphWeights.size(), morphData.targets.size());
+        for (size_t t = 0; t < numTargets; ++t) {
+            const float w = morphWeights[t];
+            if (std::abs(w) < 1e-6f) continue;
+            const auto& target  = morphData.targets[t];
+            const size_t dcount = std::min(numVerts, target.deltaPos.size());
+            for (size_t v = 0; v < dcount; ++v)
+                deformed[v].pos += target.deltaPos[v] * w;
+        }
     }
 
-    m_VAO.vbo.upload_data(morphed.data(), numVerts * sizeof(Graphics::Vertex));
+    // --- Skeletal skinning ---
+    if (m_properties.skinData.has_value() && !jointMatrices.empty()) {
+        const SkinData& skin    = *m_properties.skinData;
+        const size_t    nJoints = std::min(jointMatrices.size(), skin.inverseBindMatrices.size());
+
+        // Accumulate local TRS matrices into world-space transforms, root-to-leaf.
+        // parentIndices is sorted so that parent[j] < j (guaranteed by glTF hierarchy).
+        std::vector<Mat4> worldMats(nJoints, Mat4(1.0f));
+        for (size_t j = 0; j < nJoints; ++j) {
+            int parent = (j < skin.parentIndices.size()) ? skin.parentIndices[j] : -1;
+            if (parent >= 0 && parent < (int)nJoints)
+                worldMats[j] = worldMats[parent] * jointMatrices[j];
+            else
+                worldMats[j] = jointMatrices[j];
+        }
+
+        // Build skinning matrices and their normal matrices (inverse-transpose).
+        std::vector<Mat4> skinMats(nJoints);
+        std::vector<Mat3> normalMats(nJoints);
+        for (size_t j = 0; j < nJoints; ++j) {
+            skinMats[j]   = worldMats[j] * skin.inverseBindMatrices[j];
+            normalMats[j] = Mat3(glm::transpose(glm::inverse(skinMats[j])));
+        }
+
+        // Apply per-vertex blend.
+        const size_t skinVerts = std::min(numVerts, skin.jointIndices.size());
+        for (size_t v = 0; v < skinVerts; ++v) {
+            const glm::uvec4& ji = skin.jointIndices[v];
+            const Vec4&       jw = skin.jointWeights[v];
+
+            Vec4 skinnedPos(0.0f);
+            Vec3 skinnedNormal(0.0f);
+            Vec3 skinnedTangent(0.0f);
+
+            for (int k = 0; k < 4; ++k) {
+                float    w = jw[k];
+                uint32_t j = ji[k];
+                if (w < 1e-6f || j >= nJoints) continue;
+                skinnedPos     += w * (skinMats[j]   * Vec4(deformed[v].pos,    1.0f));
+                skinnedNormal  += w * (normalMats[j] * deformed[v].normal);
+                skinnedTangent += w * (normalMats[j] * deformed[v].tangent);
+            }
+
+            deformed[v].pos     = Vec3(skinnedPos);
+            deformed[v].normal  = glm::normalize(skinnedNormal);
+            deformed[v].tangent = glm::normalize(skinnedTangent);
+        }
+    }
+
+    m_VAO.vbo.upload_data(deformed.data(), numVerts * sizeof(Graphics::Vertex));
 }
 
 Graphics::VertexArrays* const get_VAO(Geometry* g) {

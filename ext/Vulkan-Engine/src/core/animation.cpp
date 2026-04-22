@@ -72,13 +72,17 @@ void Animation::sample(float                  tSeconds,
                        const MorphTargetData& morphData,
                        AnimationPose&         out) const
 {
-    // Initialise output buffers to bind-pose defaults if they haven't been sized.
+    // Reset to bind pose every frame. Morph weights start at zero;
+    // joint matrices start at the bind-pose local TRS so the rest pose
+    // is correct and animation tracks override individual joints.
     const size_t nMorph = morphData.targets.size();
     const size_t nJoint = skinData.jointNames.size();
 
-    if (out.morphWeights.size() != nMorph)
-        out.morphWeights.assign(nMorph, 0.0f);
-    if (out.jointMatrices.size() != nJoint)
+    out.morphWeights.assign(nMorph, 0.0f);
+
+    if (skinData.bindLocalMatrices.size() == nJoint)
+        out.jointMatrices = skinData.bindLocalMatrices;
+    else
         out.jointMatrices.assign(nJoint, Mat4(1.0f));
 
     const float t = clamp_time(tSeconds, duration, loop);
